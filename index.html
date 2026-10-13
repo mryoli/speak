@@ -278,6 +278,12 @@ a{color:var(--blue)}
     <label>Voix</label><select id="setVoice"></select>
     <label>Vitesse de parole : <span id="rateLbl"></span></label>
     <input id="setRate" type="range" min="0.6" max="1.2" step="0.05" style="padding:0">
+    <label>Reconnaissance de ta voix</label>
+    <select id="setStt">
+      <option value="gemini">Gemini — précise sur accent francophone (recommandé)</option>
+      <option value="browser">Navigateur — gratuite, moins fidèle</option>
+    </select>
+    <p class="hint">Gemini reçoit ton audio et le transcrit lui-même : c'est ce qui rend les corrections justes. Le mode navigateur ne consomme aucun quota mais transcrit mal.</p>
     <label>Correction</label>
     <select id="setCorr">
       <option value="recast">Discrète pendant la conversation (recommandé)</option>
@@ -307,7 +313,7 @@ a{color:var(--blue)}
 /* ============================================================
    STORE
    ============================================================ */
-const DEF = {apiKey:'',model:'',level:'',ctx:'',voice:'',rate:0.92,corr:'recast'};
+const DEF = {apiKey:'',model:'',level:'',ctx:'',voice:'',rate:0.92,corr:'recast',stt:'gemini'};
 const S = {
   get cfg(){ return Object.assign({},DEF,JSON.parse(localStorage.getItem('cfg')||'{}')); },
   set cfg(v){ localStorage.setItem('cfg',JSON.stringify(v)); },
@@ -399,6 +405,7 @@ async function gem(parts, schema, sys){
 const SCH_TURN = {
   type:'object',
   properties:{
+    heard:{type:'string'},
     reply:{type:'string'},
     correction:{type:'object',properties:{
       said:{type:'string'}, better:{type:'string'}, rule:{type:'string'}
@@ -408,7 +415,7 @@ const SCH_TURN = {
     needsTyping:{type:'boolean'},
     typingPrompt:{type:'string'}
   },
-  required:['reply','correction','expressions','needsTyping','typingPrompt']
+  required:['heard','reply','correction','expressions','needsTyping','typingPrompt']
 };
 const SCH_DEBRIEF = {
   type:'object',
@@ -465,8 +472,8 @@ HOW YOU TALK
 4. Be a real interlocutor, not an interviewer: react, challenge, disagree sometimes, ask follow-ups, bring your own opinions. Stay in character for the scenario.
 5. Match the learner's level: simple structures for A2/B1, richer register for B2/C1.
 
-CRITICAL — SPEECH RECOGNITION NOISE
-The learner's turns come from automatic speech recognition, which is imperfect on a French accent. IGNORE anything that looks like a transcription artefact rather than a language mistake: homophones, mangled proper nouns, missing punctuation, a dropped final -s, random word salad. Only flag mistakes you are confident the learner actually made. When in doubt, flag nothing.
+AUDIO
+The learner's turn usually arrives as an audio recording. Listen to it and transcribe what they actually said, word for word, into "heard" — including their mistakes, which you must NOT silently fix there. "heard" is what gets shown back to them and what the corrections are based on, so it must be faithful. If the audio is empty or unintelligible, set "heard" to an empty string and ask them in "reply" to repeat. When the turn arrives as text instead, copy that text into "heard" unchanged.
 
 FIELDS
 - correction: at most ONE genuine language mistake per turn, the most useful one. "said" = what the learner said, "better" = the correct version, "rule" = the explanation IN FRENCH, one short line. If there is no confident mistake, set all three to empty strings.
@@ -478,53 +485,151 @@ FIELDS
    SPEECH
    ============================================================ */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec=null, listening=false, wantListen=false, recLang='en-US';
-let finalBuf='', speakStart=0, autoMode=true;
+let listening=false, autoMode=true, curLang='en', speakStart=0;
 
+/* ---------- A. capture audio -> Gemini (précis, par défaut) ---------- */
+let aCtx=null, aStream=null, aNode=null, aGain=null, pcm=[], aRate=48000;
+
+async function startAudio(){
+  try{
+    aStream = await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
+  }catch(e){
+    toast('Micro refusé. Autorise-le via le cadenas dans la barre d’adresse.');
+    return false;
+  }
+  aCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if(aCtx.state==='suspended'){ try{ await aCtx.resume(); }catch(e){} }
+  aRate = aCtx.sampleRate;
+  const src = aCtx.createMediaStreamSource(aStream);
+  aNode = aCtx.createScriptProcessor(4096,1,1);
+  aGain = aCtx.createGain(); aGain.gain.value = 0;   // jamais renvoyé aux haut-parleurs
+  pcm=[];
+  let hasSpeech=false, silStart=null;
+  aNode.onaudioprocess = e=>{
+    const d = e.inputBuffer.getChannelData(0);
+    pcm.push(new Float32Array(d));
+    let sum=0; for(let i=0;i<d.length;i++) sum += d[i]*d[i];
+    const rms = Math.sqrt(sum/d.length);
+    if(rms > 0.012){ hasSpeech=true; silStart=null; }
+    else if(hasSpeech){
+      if(!silStart) silStart = Date.now();
+      else if(Date.now()-silStart > 1700) stopListen();   // fin de parole
+    }
+  };
+  src.connect(aNode); aNode.connect(aGain); aGain.connect(aCtx.destination);
+  listening=true; speakStart=Date.now(); paintMic();
+  return true;
+}
+function endAudio(){
+  try{ if(aNode){ aNode.onaudioprocess=null; aNode.disconnect(); } }catch(e){}
+  try{ if(aGain) aGain.disconnect(); }catch(e){}
+  try{ if(aStream) aStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ if(aCtx) aCtx.close(); }catch(e){}
+  aNode=aGain=aStream=aCtx=null;
+}
+/* PCM flottant -> WAV 16 kHz mono 16 bits, encodé en base64 */
+function pcmToWav(chunks, inRate, outRate){
+  let len=0; chunks.forEach(c=>len+=c.length);
+  const flat=new Float32Array(len); let o=0;
+  chunks.forEach(c=>{ flat.set(c,o); o+=c.length; });
+  const ratio=inRate/outRate, n=Math.floor(flat.length/ratio);
+  const out=new Int16Array(n);
+  for(let i=0;i<n;i++){
+    const idx=i*ratio, i0=Math.floor(idx), i1=Math.min(i0+1,flat.length-1);
+    let v=flat[i0]+(flat[i1]-flat[i0])*(idx-i0);
+    v=Math.max(-1,Math.min(1,v));
+    out[i]= v<0 ? v*0x8000 : v*0x7fff;
+  }
+  const buf=new ArrayBuffer(44+out.length*2), dv=new DataView(buf);
+  const str=(off,t)=>{ for(let i=0;i<t.length;i++) dv.setUint8(off+i,t.charCodeAt(i)); };
+  str(0,'RIFF'); dv.setUint32(4,36+out.length*2,true); str(8,'WAVE');
+  str(12,'fmt '); dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
+  dv.setUint32(24,outRate,true); dv.setUint32(28,outRate*2,true);
+  dv.setUint16(32,2,true); dv.setUint16(34,16,true);
+  str(36,'data'); dv.setUint32(40,out.length*2,true);
+  new Int16Array(buf,44).set(out);
+  const u8=new Uint8Array(buf); let bin='';
+  for(let i=0;i<u8.length;i+=0x8000) bin += String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));
+  return {b64:btoa(bin), seconds:out.length/outRate};
+}
+
+/* ---------- B. repli : reconnaissance du navigateur ---------- */
+let rec=null, wantListen=false, finalBuf='';
 function initRec(){
-  if(!SR){ toast("Ce navigateur ne gère pas la reconnaissance vocale. Utilise Chrome."); return null; }
-  const r = new SR();
-  r.lang = recLang; r.continuous = true; r.interimResults = true;
-  r.onstart = ()=>{ listening=true; speakStart=Date.now(); paintMic(); };
-  r.onresult = e=>{
+  if(!SR){ toast('Ce navigateur ne gère pas la reconnaissance vocale.'); return null; }
+  const r=new SR(); r.continuous=true; r.interimResults=true;
+  r.onstart=()=>{ listening=true; speakStart=Date.now(); paintMic(); };
+  r.onresult=e=>{
     let interim='';
     for(let i=e.resultIndex;i<e.results.length;i++){
-      const t = e.results[i][0].transcript;
-      if(e.results[i].isFinal) finalBuf += t+' '; else interim += t;
+      const t=e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalBuf+=t+' '; else interim+=t;
     }
-    document.getElementById('live').innerHTML =
+    document.getElementById('live').innerHTML=
       `<span class="fin">${esc(finalBuf)}</span><span style="opacity:.55">${esc(interim)}</span>`;
   };
-  r.onerror = e=>{
-    if(e.error==='not-allowed'){ wantListen=false; toast("Micro refusé. Autorise-le dans les réglages du site."); }
-    else if(e.error==='no-speech'){ /* ignore */ }
-    else if(e.error==='network'){ toast('Reconnaissance vocale indisponible (réseau).'); wantListen=false; }
+  r.onerror=e=>{
+    if(e.error==='not-allowed'){ wantListen=false; toast('Micro refusé.'); }
+    else if(e.error==='network'){ wantListen=false; toast('Reconnaissance indisponible (réseau).'); }
   };
-  r.onend = ()=>{
+  r.onend=()=>{
     listening=false;
-    if(speakStart) { sess.talkMs += Date.now()-speakStart; speakStart=0; }
+    if(speakStart){ sess.talkMs += Date.now()-speakStart; speakStart=0; }
     paintMic();
-    if(wantListen){ try{ r.start(); }catch(e){} }
-    else submitSpeech();
+    if(wantListen){ try{ r.start(); }catch(e){} } else submitSpeech();
   };
   return r;
 }
 function startRec(lang){
-  if(speaking) stopSpeak();
-  recLang = lang||'en-US';
-  if(!rec) rec = initRec();
+  if(!rec) rec=initRec();
   if(!rec) return;
-  rec.lang = recLang;
-  finalBuf=''; wantListen=true;
-  document.getElementById('live').textContent='Je t\u2019écoute…';
+  rec.lang=lang; finalBuf=''; wantListen=true;
   try{ rec.start(); }catch(e){}
   paintMic();
 }
-function stopRec(){ wantListen=false; if(rec && listening){ try{rec.stop();}catch(e){} } else submitSpeech(); }
-function toggleMic(){ if(wantListen||listening) stopRec(); else startRec('en-US'); }
+function stopRec(){
+  wantListen=false;
+  if(rec && listening){ try{ rec.stop(); }catch(e){} } else submitSpeech();
+}
+function submitSpeech(){
+  const t=finalBuf.trim(); finalBuf='';
+  document.getElementById('live').textContent='Appuie sur le micro et parle';
+  if(!t) return;
+  if(curLang==='fr'){ helpWithText(t); return; }
+  addMe(t); sess.userWords += t.split(/\s+/).length; updMeta();
+  sess.hist.push({role:'user',parts:[{text:t}]});
+  turn();
+}
+
+/* ---------- commandes unifiées ---------- */
+async function startListen(lang){
+  if(busy) return;
+  stopSpeak();
+  curLang = lang||'en';
+  document.getElementById('live').textContent =
+    curLang==='fr' ? 'Dis-le en français…' : 'Je t’écoute…';
+  if(S.cfg.stt==='browser'){ startRec(curLang==='fr'?'fr-FR':'en-US'); return; }
+  const ok = await startAudio();
+  if(!ok){ document.getElementById('live').textContent='Appuie sur le micro et parle'; paintMic(); }
+}
+function stopListen(){
+  if(S.cfg.stt==='browser'){ stopRec(); return; }
+  if(!listening) return;
+  listening=false;
+  if(speakStart){ sess.talkMs += Date.now()-speakStart; speakStart=0; }
+  const chunks=pcm, rate=aRate; pcm=[];
+  endAudio(); paintMic();
+  document.getElementById('live').textContent='Appuie sur le micro et parle';
+  if(!chunks.length) return;
+  const w = pcmToWav(chunks, rate, 16000);
+  if(w.seconds < 0.5) return;
+  if(curLang==='fr') helpWithAudio(w.b64); else turnWithAudio(w.b64);
+}
+function toggleMic(){ if(listening) stopListen(); else startListen('en'); }
 function paintMic(){
-  const m = document.getElementById('mic');
-  m.className = 'mic' + (listening?' live':'') + (busy?' off':'');
+  const m=document.getElementById('mic');
+  m.className='mic'+(busy?' off':'')+(listening?' live':'');
   m.textContent = listening?'⏹':'🎤';
 }
 
@@ -595,7 +700,7 @@ function startChat(i){
 }
 
 function quitChat(){
-  wantListen=false; stopRec(); stopSpeak();
+  wantListen=false; finalBuf=''; pcm=[]; stopListen(); stopSpeak();
   if(sess && sess.turns>0) saveSession();
   go('sHome');
 }
@@ -657,16 +762,6 @@ function thinkOn(){
 }
 function thinkOff(){ const e=document.getElementById('think'); if(e) e.remove(); }
 
-function submitSpeech(){
-  const t = finalBuf.trim(); finalBuf='';
-  document.getElementById('live').textContent='Appuie sur le micro et parle';
-  if(!t) return;
-  if(recLang.startsWith('fr')){ helpWith(t); return; }
-  sess.userWords += t.split(/\s+/).length;
-  addMe(t); updMeta();
-  sess.hist.push({role:'user',parts:[{text:t}]});
-  turn();
-}
 function sendTyped(){
   const el=document.getElementById('typeIn'), t=el.value.trim();
   if(!t) return; el.value=''; el.blur();
@@ -676,39 +771,59 @@ function sendTyped(){
   turn();
 }
 
+/* un tour à partir de l'historique texte seul */
 async function turn(seed){
   if(busy) return;
   busy=true; paintMic(); thinkOn();
-  const hist = seed || sess.hist;
   if(seed) sess.hist = seed.slice();
   try{
     const r = await gem(sess.hist, SCH_TURN, sysPrompt(sess.scen.p));
+    thinkOff(); applyTurn(r);
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
+}
+
+/* un tour à partir d'un enregistrement : Gemini transcrit ET répond */
+async function turnWithAudio(b64){
+  if(busy) return;
+  busy=true; paintMic(); thinkOn();
+  const req = sess.hist.concat([{role:'user',parts:[
+    {text:'(Learner turn — audio below. Transcribe it faithfully into "heard", then reply.)'},
+    {inlineData:{mimeType:'audio/wav',data:b64}}
+  ]}]);
+  try{
+    const r = await gem(req, SCH_TURN, sysPrompt(sess.scen.p));
     thinkOff();
-    sess.turns++;
-    sess.hist.push({role:'model',parts:[{text:JSON.stringify(r)}]});
-    if(sess.hist.length>40) sess.hist.splice(1,2);
+    const heard = (r.heard||'').trim();
+    if(heard){ addMe(heard); sess.userWords += heard.split(/\s+/).length; }
+    else addSys('🔇 Rien d’audible');
+    // l'audio ne reste PAS dans l'historique : seul le texte entendu y va
+    sess.hist.push({role:'user',parts:[{text: heard || '(inaudible)'}]});
+    applyTurn(r);
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
+}
 
-    const c = S.cfg.corr;
-    if(r.correction && r.correction.said && r.correction.better && c!=='none'){
-      sess.corrections.push(r.correction);
-      recordError(r.correction);
-      if(c==='explicit') addCorr(r.correction);
-    }
-    (r.expressions||[]).forEach(e=>{ if(e.en){ sess.exprs.push(e); } });
-
-    const id = addAI(r.reply);
-    if(r.needsTyping && r.typingPrompt){
-      addSys('✍️ ' + r.typingPrompt);
-      document.getElementById('typebar').style.display='flex';
-    }
-    busy=false; paintMic();
-    speak(r.reply, ()=>{
-      if(autoMode && !r.needsTyping && document.getElementById('sChat').classList.contains('on')) startRec('en-US');
-    });
-  }catch(e){
-    thinkOff(); busy=false; paintMic();
-    addSys('⚠️ '+e.message);
+function applyTurn(r){
+  sess.turns++;
+  sess.hist.push({role:'model',parts:[{text:JSON.stringify({reply:r.reply})}]});
+  if(sess.hist.length>40) sess.hist.splice(1,2);
+  updMeta();
+  const c = S.cfg.corr;
+  if(r.correction && r.correction.said && r.correction.better && c!=='none'){
+    sess.corrections.push(r.correction);
+    recordError(r.correction);
+    if(c==='explicit') addCorr(r.correction);
   }
+  (r.expressions||[]).forEach(e=>{ if(e.en) sess.exprs.push(e); });
+  addAI(r.reply);
+  if(r.needsTyping && r.typingPrompt){
+    addSys('✍️ ' + r.typingPrompt);
+    document.getElementById('typebar').style.display='flex';
+  }
+  busy=false; paintMic();
+  speak(r.reply, ()=>{
+    if(autoMode && !r.needsTyping && document.getElementById('sChat').classList.contains('on'))
+      startListen('en');
+  });
 }
 
 function replay(id){ const el=document.getElementById(id); if(el) speak(el.dataset.en); }
@@ -752,26 +867,40 @@ function showWord(w,r){
 }
 function keepWord(en,fr){ addExpr({en,fr}); closeModal(); toast('Ajouté à tes révisions'); }
 
-/* stuck → speak French */
+/* bouton "bloqué" : on parle français, l'app rend la tournure anglaise */
 function stuck(){
-  if(listening||wantListen) stopRec();
+  if(listening) stopListen();
   toast('Dis en français ce que tu veux dire');
-  setTimeout(()=>startRec('fr-FR'),350);
+  setTimeout(()=>startListen('fr'), 400);
 }
-async function helpWith(fr){
-  addSys('🆘 '+fr);
-  thinkOn();
+function helpOut(r){
+  addSys('🆘 '+r.fr);
+  const b=document.getElementById('chatBody');
+  b.insertAdjacentHTML('beforeend',
+    `<div class="corr"><div class="ttl">À dire</div><div class="v">${esc(r.en)}</div><div class="r">${esc(r.note)}</div></div>`);
+  b.scrollTop=b.scrollHeight;
+  addExpr({en:r.en, fr:r.fr});
+  speak(r.en, ()=>{ toast('Répète-le à voix haute'); startListen('en'); });
+}
+const HELP_TASK = fr => `A French-speaking learner is in this situation: ${sess.scen.p}
+They want to say something in English but are stuck.
+"fr" = what they want to say, in French. "en" = the most natural English way to say it in this professional context. "note" = one short line in French on why this phrasing, or a trap to avoid.`;
+async function helpWithAudio(b64){
+  busy=true; paintMic(); thinkOn();
   try{
-    const r = await gem([{role:'user',parts:[{text:
-      `A French-speaking learner is in this situation: ${sess.scen.p}\nThey want to say this in English: "${fr}"\n\nGive the most natural English way to say it in this professional context. "en" = the English sentence. "fr" = the French. "note" = one short line in French on why this phrasing, or a trap to avoid.`}]}], SCH_HELP);
-    thinkOff();
-    addSys('👉 ' + r.en);
-    addExpr({en:r.en, fr:r.fr});
-    speak(r.en, ()=>{ toast('Répète-le à voix haute'); startRec('en-US'); });
-    const b=document.getElementById('chatBody');
-    b.insertAdjacentHTML('beforeend',`<div class="corr"><div class="ttl">À dire</div><div class="v">${esc(r.en)}</div><div class="r">${esc(r.note)}</div></div>`);
-    b.scrollTop=b.scrollHeight;
-  }catch(e){ thinkOff(); addSys('⚠️ '+e.message); }
+    const r = await gem([{role:'user',parts:[
+      {text: HELP_TASK() + '\nThe attached audio is them saying it in French. Transcribe it into "fr".'},
+      {inlineData:{mimeType:'audio/wav',data:b64}}
+    ]}], SCH_HELP);
+    thinkOff(); busy=false; paintMic(); helpOut(r);
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
+}
+async function helpWithText(fr){
+  busy=true; paintMic(); thinkOn();
+  try{
+    const r = await gem([{role:'user',parts:[{text: HELP_TASK() + `\nThey said, in French: "${fr}"`}]}], SCH_HELP);
+    thinkOff(); busy=false; paintMic(); helpOut(r);
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
 }
 
 function toggleAuto(){
@@ -843,7 +972,7 @@ function grade(ok){
    ============================================================ */
 async function doDebrief(){
   if(!sess || sess.turns===0){ toast('Parle un peu d\u2019abord.'); return; }
-  wantListen=false; stopRec(); stopSpeak();
+  wantListen=false; stopListen(); stopSpeak();
   go('sDebrief');
   document.getElementById('debriefBody').innerHTML='<div class="empty">Analyse de la session…</div>';
   const said = sess.hist.filter(h=>h.role==='user').map(h=>h.parts[0].text).join('\n---\n');
@@ -1008,6 +1137,7 @@ function fillSettings(){
   sl.innerHTML=document.getElementById('level').innerHTML; sl.value=c.level;
   document.getElementById('setCtx').value=c.ctx;
   document.getElementById('setCorr').value=c.corr;
+  document.getElementById('setStt').value=c.stt;
   document.getElementById('setRate').value=c.rate;
   document.getElementById('rateLbl').textContent=c.rate+'×';
   loadVoices();
@@ -1023,7 +1153,8 @@ function saveSettings(){
     ctx:document.getElementById('setCtx').value.trim(),
     voice:document.getElementById('setVoice').value,
     rate:+document.getElementById('setRate').value,
-    corr:document.getElementById('setCorr').value
+    corr:document.getElementById('setCorr').value,
+    stt:document.getElementById('setStt').value
   });
   toast('Enregistré'); go('sHome');
 }
