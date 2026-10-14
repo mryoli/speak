@@ -38,8 +38,10 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .btn.sec{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
 .btn.ghost{background:none;border:1px solid var(--line);color:var(--dim)}
 .btn.sm{padding:10px 14px;width:auto;font-size:14px;display:inline-block}
-.icbtn{padding:8px 10px;border-radius:10px;color:var(--dim);font-size:19px;line-height:1}
-.icbtn:active{background:var(--surface2)}
+.icbtn{padding:9px;border-radius:11px;color:var(--dim);display:flex;align-items:center;justify-content:center}
+.icbtn:active{background:var(--surface2);color:var(--text)}
+.ic{display:block;flex:0 0 auto}
+.ic-in{display:inline-block;vertical-align:-3px;margin-right:6px}
 input,select,textarea{
   width:100%;padding:13px;border-radius:12px;background:var(--surface2);
   border:1px solid var(--line);color:var(--text);font:inherit;outline:none;
@@ -57,15 +59,18 @@ a{color:var(--blue)}
 .empty{text-align:center;color:var(--faint);padding:48px 20px;font-size:14px;line-height:1.6}
 
 /* ---------- home ---------- */
-.scen{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;padding:14px;
-  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-bottom:9px}
-.scen:active{border-color:var(--accent-dim)}
-.scen .em{font-size:21px;line-height:1.2}
-.scen b{display:block;font-weight:620;margin-bottom:2px;font-size:15px}
-.scen span{font-size:13px;color:var(--faint);line-height:1.4}
+.scen{display:flex;gap:13px;align-items:center;width:100%;text-align:left;padding:13px 14px;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;
+  transition:border-color .15s,background .15s}
+.scen:active{border-color:var(--accent);background:var(--surface2)}
+.scen .tile{width:40px;height:40px;border-radius:11px;flex:0 0 auto;display:flex;align-items:center;
+  justify-content:center;background:rgba(167,139,250,.13);color:var(--accent)}
+.scen b{display:block;font-weight:620;margin-bottom:1px;font-size:15px}
+.scen .sub{font-size:12.5px;color:var(--faint);line-height:1.35;display:block}
+.scen .go{color:var(--faint);flex:0 0 auto}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:20px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 8px;text-align:center}
-.stat b{display:block;font-size:22px;font-weight:700;letter-spacing:-.02em}
+.stat b{display:block;font-size:23px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .stat span{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em}
 
 /* ---------- chat ---------- */
@@ -75,15 +80,19 @@ a{color:var(--blue)}
 .msg.me{margin-left:auto}
 .msg.me .bub{background:var(--surface2);border-radius:16px 4px 16px 16px;padding:11px 14px;color:var(--dim);font-size:15px}
 .msg.sys{max-width:100%;text-align:center}
-.msg.sys .bub{display:inline-block;font-size:12px;color:var(--faint);background:var(--surface);padding:6px 12px;border-radius:99px;border:1px solid var(--line)}
+.msg.sys .bub{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--faint);
+  background:var(--surface);padding:6px 13px;border-radius:99px;border:1px solid var(--line);text-align:left}
 .w{cursor:pointer;border-radius:3px;padding:0 1px}
 .w:active{background:var(--accent-dim);color:#fff}
-.mtools{display:flex;gap:4px;margin-top:7px;padding-left:2px}
-.mtools button{font-size:12px;color:var(--faint);padding:4px 9px;border-radius:8px;border:1px solid var(--line)}
-.mtools button:active{color:var(--accent)}
+.recast{font-weight:700;color:var(--accent);box-shadow:inset 0 -.55em 0 rgba(167,139,250,.14);border-radius:2px}
+.mtools{display:flex;gap:5px;margin-top:8px;padding-left:2px}
+.mtools button{font-size:12px;color:var(--faint);padding:5px 10px;border-radius:9px;border:1px solid var(--line);
+  display:flex;align-items:center;gap:5px}
+.mtools button:active{color:var(--accent);border-color:var(--accent-dim)}
 .fr{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);font-size:14px;color:var(--dim);font-style:italic}
 .corr{background:rgba(167,139,250,.09);border:1px solid var(--accent-dim);border-radius:12px;padding:11px 13px;margin-bottom:16px;font-size:14px}
-.corr .ttl{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.corr .ttl{font-size:10.5px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;
+  margin-bottom:7px;display:flex;align-items:center;gap:5px}
 .corr .x{color:var(--bad);text-decoration:line-through;opacity:.8}
 .corr .v{color:var(--ok);font-weight:600}
 .corr .r{font-size:12.5px;color:var(--faint);margin-top:5px}
@@ -97,15 +106,19 @@ a{color:var(--blue)}
   line-height:1.4;max-height:72px;overflow:hidden}
 .livebox .fin{color:var(--text)}
 .miczone{display:flex;align-items:center;justify-content:center;gap:16px}
-.mic{width:76px;height:76px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7c5ce0);color:#190f30;
-  font-size:30px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;transition:transform .12s}
+.mic{width:78px;height:78px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7c5ce0);color:#190f30;
+  display:flex;align-items:center;justify-content:center;flex:0 0 auto;transition:transform .12s;
+  box-shadow:0 6px 22px rgba(124,92,224,.28)}
 .mic:active{transform:scale(.94)}
 .mic.off{background:var(--surface2);color:var(--faint)}
 .mic.live{background:var(--bad);color:#fff;animation:pulse 1.4s infinite}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(240,115,106,.45)}70%{box-shadow:0 0 0 18px rgba(240,115,106,0)}}
-.side{display:flex;flex-direction:column;align-items:center;gap:4px;width:72px}
-.side button{font-size:22px;padding:9px;border-radius:12px;border:1px solid var(--line);width:46px;color:var(--dim)}
-.side span{font-size:10px;color:var(--faint);text-align:center;line-height:1.2}
+.side{display:flex;flex-direction:column;align-items:center;gap:5px;width:74px}
+.side button{padding:11px;border-radius:13px;border:1px solid var(--line);color:var(--dim);
+  display:flex;align-items:center;justify-content:center;background:var(--surface)}
+.side button:active{border-color:var(--accent-dim);color:var(--accent)}
+.side button.on{color:var(--accent);border-color:var(--accent-dim);background:rgba(167,139,250,.08)}
+.side span{font-size:10px;color:var(--faint);text-align:center;line-height:1.25}
 .typebar{display:flex;gap:8px;margin-bottom:10px}
 .typebar input{flex:1}
 .bar{height:4px;background:var(--surface2);border-radius:9px;overflow:hidden;margin-bottom:10px}
@@ -198,8 +211,8 @@ a{color:var(--blue)}
       </svg>
       <h1 style="font-size:20px">Speak</h1>
     </span>
-    <button class="icbtn" onclick="go('sProgress')">📊</button>
-    <button class="icbtn" onclick="go('sSettings')">⚙️</button>
+    <button class="icbtn" data-ic="chart" onclick="go('sProgress')"></button>
+    <button class="icbtn" data-ic="gear" onclick="go('sSettings')"></button>
   </div>
   <div class="body">
     <div class="stats">
@@ -218,7 +231,7 @@ a{color:var(--blue)}
 <!-- ============ CHAT ============ -->
 <div id="sChat" class="screen">
   <div class="topbar">
-    <button class="icbtn" onclick="quitChat()">✕</button>
+    <button class="icbtn" data-ic="close" onclick="quitChat()"></button>
     <div class="grow" style="font-size:14px;color:var(--dim)">
       <span id="chatTitle">Conversation</span>
       <div style="font-size:11px;color:var(--faint)" id="chatMeta">—</div>
@@ -230,16 +243,16 @@ a{color:var(--blue)}
     <div class="bar"><i id="talkBar" style="width:0%"></i></div>
     <div id="typebar" class="typebar" style="display:none">
       <input id="typeIn" placeholder="Écris ici…" autocomplete="off" autocapitalize="off">
-      <button class="btn sm" onclick="sendTyped()">→</button>
+      <button class="btn sm" data-ic="arrow" onclick="sendTyped()" style="display:flex;align-items:center;padding:10px 15px"></button>
     </div>
     <div class="livebox" id="live">Appuie sur le micro et parle</div>
     <div class="miczone">
       <div class="side">
-        <button onclick="stuck()">🆘</button><span>Bloqué<br>(parle FR)</span>
+        <button data-ic="help" onclick="stuck()"></button><span>Bloqué<br>(parle FR)</span>
       </div>
-      <button class="mic" id="mic" onclick="toggleMic()">🎤</button>
+      <button class="mic" id="mic" onclick="toggleMic()"></button>
       <div class="side">
-        <button onclick="toggleAuto()" id="autoBtn">🔁</button><span id="autoLbl">Mains<br>libres</span>
+        <button data-ic="loop" id="autoBtn" onclick="toggleAuto()"></button><span>Mains<br>libres</span>
       </div>
     </div>
   </div>
@@ -247,14 +260,14 @@ a{color:var(--blue)}
 
 <!-- ============ DEBRIEF ============ -->
 <div id="sDebrief" class="screen">
-  <div class="topbar"><button class="icbtn" onclick="go('sHome')">←</button><h1 class="grow">Debrief</h1></div>
+  <div class="topbar"><button class="icbtn" data-ic="back" onclick="go('sHome')"></button><h1 class="grow">Debrief</h1></div>
   <div class="body" id="debriefBody"></div>
   <div class="foot"><button class="btn" onclick="go('sHome')">Terminer</button></div>
 </div>
 
 <!-- ============ REVIEW ============ -->
 <div id="sReview" class="screen">
-  <div class="topbar"><button class="icbtn" onclick="go('sHome')">←</button><h1 class="grow">Révision</h1>
+  <div class="topbar"><button class="icbtn" data-ic="back" onclick="go('sHome')"></button><h1 class="grow">Révision</h1>
     <span class="pill n" id="revCount">0</span></div>
   <div class="body" id="revBody"></div>
   <div class="foot" id="revFoot"></div>
@@ -262,13 +275,13 @@ a{color:var(--blue)}
 
 <!-- ============ PROGRESS ============ -->
 <div id="sProgress" class="screen">
-  <div class="topbar"><button class="icbtn" onclick="go('sHome')">←</button><h1 class="grow">Progression</h1></div>
+  <div class="topbar"><button class="icbtn" data-ic="back" onclick="go('sHome')"></button><h1 class="grow">Progression</h1></div>
   <div class="body" id="progBody"></div>
 </div>
 
 <!-- ============ SETTINGS ============ -->
 <div id="sSettings" class="screen">
-  <div class="topbar"><button class="icbtn" onclick="go('sHome')">←</button><h1 class="grow">Réglages</h1></div>
+  <div class="topbar"><button class="icbtn" data-ic="back" onclick="go('sHome')"></button><h1 class="grow">Réglages</h1></div>
   <div class="body">
     <label>Clé API</label><input id="setKey" type="password" autocomplete="off">
     <label>Modèle</label><select id="setModel"></select>
@@ -293,7 +306,7 @@ a{color:var(--blue)}
     <div style="margin-top:28px">
       <button class="btn sec" onclick="saveSettings()">Enregistrer</button>
       <div class="row" style="margin-top:10px">
-        <button class="btn ghost sm" onclick="exportData()" style="flex:1">Exporter mes données</button>
+        <button class="btn ghost sm" onclick="exportData()" style="flex:1">Exporter</button>
         <button class="btn ghost sm" onclick="document.getElementById('imp').click()" style="flex:1">Importer</button>
       </div>
       <input id="imp" type="file" accept=".json" style="display:none" onchange="importData(this)">
@@ -310,6 +323,45 @@ a{color:var(--blue)}
 
 <script>
 'use strict';
+/* ============================================================
+   ICONS — jeu de traits SVG, hérite de currentColor
+   ============================================================ */
+const ICONS={
+chart:'<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+back:'<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
+close:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+chevron:'<path d="m9 18 6-6-6-6"/>',
+mic:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+stop:'<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
+help:'<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+loop:'<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+sound:'<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M18.9 5.1a9 9 0 0 1 0 13.8"/>',
+mute:'<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/>',
+pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+check:'<path d="M20 6 9 17l-5-5"/>',
+lang:'<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+present:'<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>',
+money:'<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+globe:'<circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/>',
+users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+bulb:'<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+chat:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+shuffle:'<path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="m4 4 5 5"/>',
+cards:'<rect x="2" y="6" width="14" height="14" rx="2"/><path d="M8 6V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2"/>',
+flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>'
+};
+function ic(n,sz,cls){
+  return `<svg class="ic${cls?' '+cls:''}" width="${sz||20}" height="${sz||20}" viewBox="0 0 24 24" `
+    + `fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" `
+    + `stroke-linejoin="round" aria-hidden="true">${ICONS[n]||''}</svg>`;
+}
+
 /* ============================================================
    STORE
    ============================================================ */
@@ -407,6 +459,7 @@ const SCH_TURN = {
   properties:{
     heard:{type:'string'},
     reply:{type:'string'},
+    recast:{type:'string'},
     correction:{type:'object',properties:{
       said:{type:'string'}, better:{type:'string'}, rule:{type:'string'}
     }, required:['said','better','rule']},
@@ -415,7 +468,7 @@ const SCH_TURN = {
     needsTyping:{type:'boolean'},
     typingPrompt:{type:'string'}
   },
-  required:['heard','reply','correction','expressions','needsTyping','typingPrompt']
+  required:['heard','reply','recast','correction','expressions','needsTyping','typingPrompt']
 };
 const SCH_DEBRIEF = {
   type:'object',
@@ -476,6 +529,7 @@ AUDIO
 The learner's turn usually arrives as an audio recording. Listen to it and transcribe what they actually said, word for word, into "heard" — including their mistakes, which you must NOT silently fix there. "heard" is what gets shown back to them and what the corrections are based on, so it must be faithful. If the audio is empty or unintelligible, set "heard" to an empty string and ask them in "reply" to repeat. When the turn arrives as text instead, copy that text into "heard" unchanged.
 
 FIELDS
+- recast: when your reply naturally reuses the CORRECT form of something the learner got wrong, copy that fragment of your own "reply" here, VERBATIM — exact same characters, casing and punctuation, so it can be located inside "reply" by a plain substring match. Keep it short: just the corrected phrase, not the whole sentence. It is shown highlighted to the learner, so it must genuinely be the repaired version of their mistake, not a random phrase. If your reply contains no recast, set it to an empty string. Never invent a recast to fill the field.
 - correction: at most ONE genuine language mistake per turn, the most useful one. "said" = what the learner said, "better" = the correct version, "rule" = the explanation IN FRENCH, one short line. If there is no confident mistake, set all three to empty strings.
 - expressions: 0 to 2 natural English expressions the learner should have used instead of what they said, each with a short French gloss. Only when clearly more idiomatic than what they produced. Otherwise empty array.
 - needsTyping: true ONLY when you genuinely want the learner to WRITE something (spelling, a short written sentence). This is rare — a few times per session at most. When true, "typingPrompt" says in English what to write. When false, "typingPrompt" is an empty string.`;
@@ -630,7 +684,7 @@ function toggleMic(){ if(listening) stopListen(); else startListen('en'); }
 function paintMic(){
   const m=document.getElementById('mic');
   m.className='mic'+(busy?' off':'')+(listening?' live':'');
-  m.textContent = listening?'⏹':'🎤';
+  m.innerHTML = listening ? ic('stop',30) : ic('mic',30);
 }
 
 /* TTS */
@@ -663,21 +717,21 @@ function speak(text, done){
    SCENARIOS
    ============================================================ */
 const SCEN = [
-  {em:'🤝',t:'Pitch client',d:'Tu présentes ton produit à un prospect sceptique',
+  {ic:'present',t:'Pitch client',d:'Tu présentes ton produit à un prospect sceptique',
    p:'You are a procurement manager at a large company in Abidjan. The learner is pitching their product to you. You are polite but busy and sceptical. Ask hard practical questions about price, support and references.'},
-  {em:'💰',t:'Négociation de prix',d:'On te demande une remise, tu dois tenir',
+  {ic:'money',t:'Négociation de prix',d:'On te demande une remise, tu dois tenir',
    p:'You are a client who likes the learner\'s product but says the price is too high. Push for a 30% discount. Make the learner justify their value and hold their ground.'},
-  {em:'🌍',t:'Bailleur / partenaire',d:'Call avec une institution internationale',
+  {ic:'globe',t:'Bailleur / partenaire',d:'Call avec une institution internationale',
    p:'You are a programme officer at an international institution evaluating the learner\'s organisation for a partnership. Ask about impact, governance and sustainability. Be warm but rigorous.'},
-  {em:'🎤',t:'Networking',d:'Small talk à une conférence tech',
+  {ic:'users',t:'Networking',d:'Small talk à une conférence tech',
    p:'You are another founder at a tech conference coffee break. Start with small talk, then get curious about what the learner does. Be friendly, informal, and use idiomatic English.'},
-  {em:'🧩',t:'Expliquer ton métier',d:'Quelqu\'un ne comprend pas ce que tu fais',
+  {ic:'bulb',t:'Expliquer ton métier',d:'Quelqu\'un ne comprend pas ce que tu fais',
    p:'You are an intelligent person from another field who does not understand what the learner does for a living. Keep asking "but what does that actually mean?" until they explain it clearly and simply.'},
-  {em:'🔥',t:'Gérer une objection',d:'Un client mécontent au téléphone',
+  {ic:'flame',t:'Gérer une objection',d:'Un client mécontent au téléphone',
    p:'You are an unhappy customer. Something did not work as promised. Start firm and a little annoyed. Soften only if the learner handles you well.'},
-  {em:'💬',t:'Conversation libre',d:'On parle de ce que tu veux',
+  {ic:'chat',t:'Conversation libre',d:'On parle de ce que tu veux',
    p:'Free conversation. Start by asking about the learner\'s day or current work, then follow wherever it goes. Be curious and opinionated.'},
-  {em:'🎲',t:'Surprends-moi',d:'Une situation pro au hasard',
+  {ic:'shuffle',t:'Surprends-moi',d:'Une situation pro au hasard',
    p:'Invent a realistic professional English situation the learner is likely to face (a job interview, an investor meeting, a tense email follow-up call, a panel Q&A). Announce the setting in one short sentence, then play your role.'}
 ];
 
@@ -714,9 +768,10 @@ function updMeta(){
   document.getElementById('talkBar').style.width = Math.min(100, total?(sess.talkMs/1000/total*100):0)+'%';
 }
 
-function addSys(t){
+function addSys(t,icon){
   const b=document.getElementById('chatBody');
-  b.insertAdjacentHTML('beforeend',`<div class="msg sys"><div class="bub">${esc(t)}</div></div>`);
+  b.insertAdjacentHTML('beforeend',
+    `<div class="msg sys"><div class="bub">${icon?ic(icon,14):''}<span>${esc(t)}</span></div></div>`);
   b.scrollTop=b.scrollHeight;
 }
 function addMe(t){
@@ -733,13 +788,19 @@ function tokenize(t){
     return esc(tok.slice(0,i)) + `<span class="w" data-w="${esc(core)}">${esc(core)}</span>` + esc(tok.slice(i+core.length));
   }).join('');
 }
-function addAI(t){
+function addAI(t, recast){
   const b=document.getElementById('chatBody'), id='m'+uid();
+  let inner;
+  const i = (recast && recast.length>1) ? t.indexOf(recast) : -1;
+  if(i>=0) inner = tokenize(t.slice(0,i))
+                 + `<b class="recast">${tokenize(recast)}</b>`
+                 + tokenize(t.slice(i+recast.length));
+  else inner = tokenize(t);
   b.insertAdjacentHTML('beforeend',
-    `<div class="msg ai" id="${id}"><div class="bub">${tokenize(t)}</div>
+    `<div class="msg ai" id="${id}"><div class="bub">${inner}</div>
      <div class="mtools">
-       <button onclick="replay('${id}')">🔊 Réécouter</button>
-       <button onclick="transl('${id}')">FR</button>
+       <button onclick="replay('${id}')">${ic('sound',14)}Réécouter</button>
+       <button onclick="transl('${id}')">${ic('lang',14)}FR</button>
      </div></div>`);
   const el = document.getElementById(id);
   el.dataset.en = t;
@@ -750,7 +811,7 @@ function addAI(t){
 function addCorr(c){
   const b=document.getElementById('chatBody');
   b.insertAdjacentHTML('beforeend',
-    `<div class="corr"><div class="ttl">Correction</div>
+    `<div class="corr"><div class="ttl">${ic('alert',13)}Correction</div>
       <div class="x">${esc(c.said)}</div><div class="v">${esc(c.better)}</div>
       <div class="r">${esc(c.rule)}</div></div>`);
   b.scrollTop=b.scrollHeight;
@@ -779,7 +840,7 @@ async function turn(seed){
   try{
     const r = await gem(sess.hist, SCH_TURN, sysPrompt(sess.scen.p));
     thinkOff(); applyTurn(r);
-  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys(e.message,'alert'); }
 }
 
 /* un tour à partir d'un enregistrement : Gemini transcrit ET répond */
@@ -795,11 +856,11 @@ async function turnWithAudio(b64){
     thinkOff();
     const heard = (r.heard||'').trim();
     if(heard){ addMe(heard); sess.userWords += heard.split(/\s+/).length; }
-    else addSys('🔇 Rien d’audible');
+    else addSys('Rien d’audible','mute');
     // l'audio ne reste PAS dans l'historique : seul le texte entendu y va
     sess.hist.push({role:'user',parts:[{text: heard || '(inaudible)'}]});
     applyTurn(r);
-  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys(e.message,'alert'); }
 }
 
 function applyTurn(r){
@@ -814,9 +875,9 @@ function applyTurn(r){
     if(c==='explicit') addCorr(r.correction);
   }
   (r.expressions||[]).forEach(e=>{ if(e.en) sess.exprs.push(e); });
-  addAI(r.reply);
+  addAI(r.reply, (r.recast||'').trim());
   if(r.needsTyping && r.typingPrompt){
-    addSys('✍️ ' + r.typingPrompt);
+    addSys(r.typingPrompt,'pencil');
     document.getElementById('typebar').style.display='flex';
   }
   busy=false; paintMic();
@@ -836,7 +897,7 @@ async function transl(id){
     const r = await gem([{role:'user',parts:[{text:'Translate into natural French:\n'+el.dataset.en}]}],
       {type:'object',properties:{fr:{type:'string'}},required:['fr']});
     el.querySelector('.fr').textContent = r.fr;
-  }catch(e){ el.querySelector('.fr').textContent = '⚠️ '+e.message; }
+  }catch(e){ el.querySelector('.fr').textContent = e.message; }
 }
 
 async function word(w, sentence){
@@ -848,7 +909,7 @@ async function word(w, sentence){
     const r = await gem([{role:'user',parts:[{text:
       `Word: "${w}"\nIn this sentence: "${sentence}"\n\nExplain this word IN THIS CONTEXT for a French speaker. "fr" = the French meaning here (2-5 words). "pos" = part of speech in French. "note" = one short line in French on usage, register or a false friend trap. "example" = one new short English example sentence. "exampleFr" = its French translation.`}]}], SCH_WORD);
     cache[key]=r; S.dict=cache; showWord(w,r);
-  }catch(e){ openModal(`<h3>${esc(w)}</h3><div class="ipa">⚠️ ${esc(e.message)}</div>`); }
+  }catch(e){ openModal(`<h3>${esc(w)}</h3><div class="ipa" style="color:var(--bad)">${esc(e.message)}</div>`); }
 }
 function showWord(w,r){
   openModal(`
@@ -861,7 +922,7 @@ function showWord(w,r){
      <div style="font-size:13.5px;color:var(--faint);margin-top:5px;font-style:italic">${esc(r.exampleFr)}</div>
    </div>
    <div class="row">
-     <button class="btn sec" style="flex:1" onclick="speak('${esc(w).replace(/'/g,"\\'")}')">🔊</button>
+     <button class="btn sec" style="flex:1" onclick="speak('${esc(w).replace(/'/g,"\\'")}')" style="display:flex;justify-content:center">${ic('sound',19)}</button>
      <button class="btn" style="flex:2" onclick="keepWord('${esc(w).replace(/'/g,"\\'")}','${esc(r.fr).replace(/'/g,"\\'")}')">Garder pour réviser</button>
    </div>`);
 }
@@ -874,10 +935,10 @@ function stuck(){
   setTimeout(()=>startListen('fr'), 400);
 }
 function helpOut(r){
-  addSys('🆘 '+r.fr);
+  addSys(r.fr,'help');
   const b=document.getElementById('chatBody');
   b.insertAdjacentHTML('beforeend',
-    `<div class="corr"><div class="ttl">À dire</div><div class="v">${esc(r.en)}</div><div class="r">${esc(r.note)}</div></div>`);
+    `<div class="corr"><div class="ttl">${ic('bulb',13)}À dire</div><div class="v">${esc(r.en)}</div><div class="r">${esc(r.note)}</div></div>`);
   b.scrollTop=b.scrollHeight;
   addExpr({en:r.en, fr:r.fr});
   speak(r.en, ()=>{ toast('Répète-le à voix haute'); startListen('en'); });
@@ -893,19 +954,19 @@ async function helpWithAudio(b64){
       {inlineData:{mimeType:'audio/wav',data:b64}}
     ]}], SCH_HELP);
     thinkOff(); busy=false; paintMic(); helpOut(r);
-  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys(e.message,'alert'); }
 }
 async function helpWithText(fr){
   busy=true; paintMic(); thinkOn();
   try{
     const r = await gem([{role:'user',parts:[{text: HELP_TASK() + `\nThey said, in French: "${fr}"`}]}], SCH_HELP);
     thinkOff(); busy=false; paintMic(); helpOut(r);
-  }catch(e){ thinkOff(); busy=false; paintMic(); addSys('⚠️ '+e.message); }
+  }catch(e){ thinkOff(); busy=false; paintMic(); addSys(e.message,'alert'); }
 }
 
 function toggleAuto(){
   autoMode=!autoMode;
-  document.getElementById('autoBtn').style.color = autoMode?'var(--accent)':'var(--dim)';
+  document.getElementById('autoBtn').classList.toggle('on', autoMode);
   toast(autoMode?'Mains libres : le micro se relance tout seul':'Mains libres désactivé');
 }
 
@@ -938,7 +999,7 @@ function renderRev(){
   const body=document.getElementById('revBody'), foot=document.getElementById('revFoot');
   document.getElementById('revCount').textContent = `${Math.min(revI+1,revQ.length)}/${revQ.length}`;
   if(revI>=revQ.length){
-    body.innerHTML = `<div class="empty">✅ Révision terminée.<br>Reviens demain.</div>`;
+    body.innerHTML = `<div class="empty"><div style="display:flex;justify-content:center;margin-bottom:12px;color:var(--ok)">${ic('check',30)}</div>Révision terminée.<br>Reviens demain.</div>`;
     foot.innerHTML = `<button class="btn" onclick="go('sHome')">Retour</button>`;
     return;
   }
@@ -952,7 +1013,7 @@ function renderRev(){
          <button class="btn sec" style="flex:1" onclick="grade(0)">À revoir</button>
          <button class="btn" style="flex:1" onclick="grade(1)">Je savais</button>
        </div>
-       <button class="btn ghost sm" style="width:100%;margin-top:8px" onclick="speakCard()">🔊 Écouter</button>`
+       <button class="btn ghost sm" style="width:100%;margin-top:8px" onclick="speakCard()" style="display:flex;align-items:center;justify-content:center;gap:7px">${ic('sound',16)}Écouter</button>`
     : `<button class="btn" onclick="revShown=true;renderRev()">Voir la réponse</button>`;
 }
 function speakCard(){ const c=revQ[revI]; if(c) speak(c.en); }
@@ -997,7 +1058,7 @@ Produce a debrief IN FRENCH for the explanations (keep English for the English).
     renderDebrief(r);
     saveSession();
   }catch(e){
-    document.getElementById('debriefBody').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
+    document.getElementById('debriefBody').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
   }
 }
 function renderDebrief(r){
@@ -1044,8 +1105,11 @@ function saveSession(){
    ============================================================ */
 function renderHome(){
   document.getElementById('scenList').innerHTML = SCEN.map((s,i)=>
-    `<button class="scen" onclick="startChat(${i})"><span class="em">${s.em}</span>
-      <span style="flex:1"><b>${esc(s.t)}</b><span>${esc(s.d)}</span></span></button>`).join('');
+    `<button class="scen" onclick="startChat(${i})">
+       <span class="tile">${ic(s.ic,21)}</span>
+       <span style="flex:1;min-width:0"><b>${esc(s.t)}</b><span class="sub">${esc(s.d)}</span></span>
+       <span class="go">${ic('chevron',18)}</span>
+     </button>`).join('');
   const ss=S.sessions;
   document.getElementById('stMin').textContent = Math.round(ss.reduce((a,b)=>a+(b.talkMs||0),0)/60000);
   const d = dueExprs().length;
@@ -1112,8 +1176,8 @@ async function loadModels(fromSettings){
     sel.value = (cur && list.includes(cur)) ? cur : pickDefault(list);
     if(!fromSettings) document.getElementById('modelWrap').style.display='block';
     localStorage.setItem('models',JSON.stringify(list));
-    toast(`✅ ${list.length} modèles disponibles`);
-  }catch(e){ toast('⚠️ '+e.message); }
+    toast(`${list.length} modèles disponibles`);
+  }catch(e){ toast(e.message); }
 }
 
 function saveSetup(){
@@ -1189,7 +1253,11 @@ function importData(input){
 document.getElementById('typeIn').addEventListener('keydown',e=>{ if(e.key==='Enter') sendTyped(); });
 setInterval(()=>{ if(sess && document.getElementById('sChat').classList.contains('on')) updMeta(); },5000);
 loadVoices();
-document.getElementById('autoBtn').style.color='var(--accent)';
+document.querySelectorAll('[data-ic]').forEach(el=>{
+  if(!el.querySelector('svg')) el.insertAdjacentHTML('afterbegin', ic(el.dataset.ic, el.classList.contains('icbtn')?21:22));
+});
+document.getElementById('autoBtn').classList.add('on');
+paintMic();
 if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 go(S.cfg.apiKey && S.cfg.model ? 'sHome' : 'sSetup');
 </script>
