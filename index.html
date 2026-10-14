@@ -102,6 +102,11 @@ a{color:var(--blue)}
 @keyframes bl{0%,60%,100%{opacity:.25}30%{opacity:1}}
 
 /* mic */
+.lvl{height:5px;background:var(--surface2);border-radius:9px;overflow:hidden;margin:0 auto 10px;
+  width:62%;opacity:0;transition:opacity .2s}
+.lvl.on{opacity:1}
+.lvl i{display:block;height:100%;width:0;border-radius:9px;
+  background:linear-gradient(90deg,var(--accent),#7c5ce0);transition:width .06s linear}
 .livebox{min-height:22px;font-size:14px;color:var(--dim);text-align:center;margin-bottom:10px;
   line-height:1.4;max-height:72px;overflow:hidden}
 .livebox .fin{color:var(--text)}
@@ -259,6 +264,7 @@ a{color:var(--blue)}
       <input id="typeIn" placeholder="Écris ici…" autocomplete="off" autocapitalize="off">
       <button class="btn sm" data-ic="arrow" onclick="sendTyped()" style="display:flex;align-items:center;padding:10px 15px"></button>
     </div>
+    <div class="lvl" id="lvl"><i id="lvlFill"></i></div>
     <div class="livebox" id="live">Appuie sur le micro et parle</div>
     <div class="miczone">
       <div class="side">
@@ -311,6 +317,11 @@ a{color:var(--blue)}
       <option value="browser">Navigateur — gratuite, moins fidèle</option>
     </select>
     <p class="hint">Gemini reçoit ton audio et le transcrit lui-même : c'est ce qui rend les corrections justes. Le mode navigateur ne consomme aucun quota mais transcrit mal.</p>
+    <label>Fin de prise de parole</label>
+    <select id="setAutostop">
+      <option value="1">S'arrête seul après 2 s de silence</option>
+      <option value="0">Je coupe le micro moi-même</option>
+    </select>
     <label>Correction</label>
     <select id="setCorr">
       <option value="recast">Discrète pendant la conversation (recommandé)</option>
@@ -384,7 +395,7 @@ function ic(n,sz,cls){
 /* ============================================================
    STORE
    ============================================================ */
-const DEF = {apiKey:'',model:'',level:'',ctx:'',voice:'',rate:0.92,corr:'recast',stt:'gemini'};
+const DEF = {apiKey:'',model:'',level:'',ctx:'',voice:'',rate:0.92,corr:'recast',stt:'gemini',hands:false,autostop:true};
 const S = {
   get cfg(){ return Object.assign({},DEF,JSON.parse(localStorage.getItem('cfg')||'{}')); },
   set cfg(v){ localStorage.setItem('cfg',JSON.stringify(v)); },
@@ -448,7 +459,7 @@ async function gem(parts, schema, sys){
   if(!c.apiKey) throw new Error('Aucune clé API configurée.');
   const body = {
     contents: parts,
-    generationConfig: { temperature:0.85, responseMimeType:'application/json', responseSchema:schema }
+    generationConfig: { temperature:0.85, maxOutputTokens:700, responseMimeType:'application/json', responseSchema:schema }
   };
   if(sys) body.systemInstruction = {parts:[{text:sys}]};
   const r = await fetch(`${API}/models/${c.model}:generateContent`,{
@@ -558,15 +569,25 @@ FIELDS
    SPEECH
    ============================================================ */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let listening=false, autoMode=true, curLang='en', speakStart=0;
+let listening=false, curLang='en', speakStart=0;
+const handsFree = ()=> S.cfg.hands===true;
 
 /* ---------- A. capture audio -> Gemini (précis, par défaut) ---------- */
+/* Le micro reste ouvert pendant toute la session : le rouvrir à chaque
+   prise de parole coûtait des centaines de ms sur Android et mangeait
+   le début de la phrase. */
 let aCtx=null, aStream=null, aNode=null, aGain=null, pcm=[], aRate=48000;
+let capturing=false, hasSpeech=false, silStart=null, level=0, lvlRaf=null;
 
-async function startAudio(){
+async function ensureMic(){
+  if(aCtx && aStream && aStream.active){
+    if(aCtx.state==='suspended'){ try{ await aCtx.resume(); }catch(e){} }
+    return true;
+  }
+  releaseMic();
   try{
     aStream = await navigator.mediaDevices.getUserMedia({audio:{
-      echoCancellation:true, noiseSuppression:true, autoGainControl:true}});
+      echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1}});
   }catch(e){
     toast('Micro refusé. Autorise-le via le cadenas dans la barre d’adresse.');
     return false;
@@ -577,29 +598,40 @@ async function startAudio(){
   const src = aCtx.createMediaStreamSource(aStream);
   aNode = aCtx.createScriptProcessor(4096,1,1);
   aGain = aCtx.createGain(); aGain.gain.value = 0;   // jamais renvoyé aux haut-parleurs
-  pcm=[];
-  let hasSpeech=false, silStart=null;
   aNode.onaudioprocess = e=>{
     const d = e.inputBuffer.getChannelData(0);
-    pcm.push(new Float32Array(d));
     let sum=0; for(let i=0;i<d.length;i++) sum += d[i]*d[i];
     const rms = Math.sqrt(sum/d.length);
-    if(rms > 0.012){ hasSpeech=true; silStart=null; }
-    else if(hasSpeech){
+    level = level*0.6 + rms*0.4;
+    if(!capturing) return;
+    pcm.push(new Float32Array(d));
+    if(rms > 0.013){ hasSpeech=true; silStart=null; }
+    else if(hasSpeech && S.cfg.autostop!==false){
       if(!silStart) silStart = Date.now();
-      else if(Date.now()-silStart > 1700) stopListen();   // fin de parole
+      else if(Date.now()-silStart > 2000) stopListen();
     }
   };
   src.connect(aNode); aNode.connect(aGain); aGain.connect(aCtx.destination);
-  listening=true; speakStart=Date.now(); paintMic();
   return true;
 }
-function endAudio(){
+function releaseMic(){
+  capturing=false;
   try{ if(aNode){ aNode.onaudioprocess=null; aNode.disconnect(); } }catch(e){}
   try{ if(aGain) aGain.disconnect(); }catch(e){}
   try{ if(aStream) aStream.getTracks().forEach(t=>t.stop()); }catch(e){}
   try{ if(aCtx) aCtx.close(); }catch(e){}
-  aNode=aGain=aStream=aCtx=null;
+  aNode=aGain=aStream=aCtx=null; pcm=[];
+}
+/* vumètre */
+function lvlLoop(){
+  const f=document.getElementById('lvlFill');
+  if(f) f.style.width = Math.min(100, Math.round(level*900)) + '%';
+  lvlRaf = listening ? requestAnimationFrame(lvlLoop) : null;
+  if(!listening && f) f.style.width='0%';
+}
+function lvlOn(on){
+  document.getElementById('lvl').classList.toggle('on', on);
+  if(on && !lvlRaf) lvlRaf = requestAnimationFrame(lvlLoop);
 }
 /* PCM flottant -> WAV 16 kHz mono 16 bits, encodé en base64 */
 function pcmToWav(chunks, inRate, outRate){
@@ -677,26 +709,32 @@ function submitSpeech(){
 
 /* ---------- commandes unifiées ---------- */
 async function startListen(lang){
-  if(busy) return;
+  if(busy || listening) return;
   stopSpeak();
   curLang = lang||'en';
+  if(S.cfg.stt==='browser'){
+    document.getElementById('live').textContent = curLang==='fr'?'Dis-le en français…':'Je t’écoute…';
+    startRec(curLang==='fr'?'fr-FR':'en-US'); return;
+  }
+  const ok = await ensureMic();
+  if(!ok){ document.getElementById('live').textContent='Appuie sur le micro et parle'; paintMic(); return; }
+  pcm=[]; hasSpeech=false; silStart=null;
+  capturing=true; listening=true; speakStart=Date.now();
   document.getElementById('live').textContent =
     curLang==='fr' ? 'Dis-le en français…' : 'Je t’écoute…';
-  if(S.cfg.stt==='browser'){ startRec(curLang==='fr'?'fr-FR':'en-US'); return; }
-  const ok = await startAudio();
-  if(!ok){ document.getElementById('live').textContent='Appuie sur le micro et parle'; paintMic(); }
+  lvlOn(true); paintMic();
 }
 function stopListen(){
   if(S.cfg.stt==='browser'){ stopRec(); return; }
   if(!listening) return;
-  listening=false;
+  capturing=false; listening=false;
   if(speakStart){ sess.talkMs += Date.now()-speakStart; speakStart=0; }
   const chunks=pcm, rate=aRate; pcm=[];
-  endAudio(); paintMic();
+  lvlOn(false); paintMic();
   document.getElementById('live').textContent='Appuie sur le micro et parle';
   if(!chunks.length) return;
   const w = pcmToWav(chunks, rate, 16000);
-  if(w.seconds < 0.5) return;
+  if(w.seconds < 0.6){ toast('Trop court — garde le micro ouvert le temps de parler'); return; }
   if(curLang==='fr') helpWithAudio(w.b64); else turnWithAudio(w.b64);
 }
 function toggleMic(){ if(listening) stopListen(); else startListen('en'); }
@@ -768,12 +806,16 @@ function startChat(i){
   document.getElementById('typebar').style.display='none';
   updMeta();
   go('sChat');
+  document.getElementById('autoBtn').classList.toggle('on', handsFree());
+  if(S.cfg.stt!=='browser') ensureMic();   // permission + contexte audio prêts d'avance
   addSys(sc.d);
   turn([{role:'user',parts:[{text:'(The learner has just opened the app. Greet them briefly, set the scene in one sentence if needed, and ask your first question.)'}]}]);
 }
 
 function quitChat(){
-  wantListen=false; finalBuf=''; pcm=[]; stopListen(); stopSpeak();
+  wantListen=false; finalBuf=''; pcm=[];
+  capturing=false; listening=false; lvlOn(false);
+  releaseMic(); stopSpeak();
   if(sess && sess.turns>0) saveSession();
   go('sHome');
 }
@@ -901,7 +943,7 @@ function applyTurn(r){
   }
   busy=false; paintMic();
   speak(r.reply, ()=>{
-    if(autoMode && !r.needsTyping && document.getElementById('sChat').classList.contains('on'))
+    if(handsFree() && !r.needsTyping && document.getElementById('sChat').classList.contains('on'))
       startListen('en');
   });
 }
@@ -960,7 +1002,7 @@ function helpOut(r){
     `<div class="corr"><div class="ttl">${ic('bulb',13)}À dire</div><div class="v">${esc(r.en)}</div><div class="r">${esc(r.note)}</div></div>`);
   b.scrollTop=b.scrollHeight;
   addExpr({en:r.en, fr:r.fr});
-  speak(r.en, ()=>{ toast('Répète-le à voix haute'); startListen('en'); });
+  speak(r.en, ()=>{ toast('Répète-le à voix haute'); if(handsFree()) startListen('en'); });
 }
 const HELP_TASK = fr => `A French-speaking learner is in this situation: ${sess.scen.p}
 They want to say something in English but are stuck.
@@ -984,9 +1026,10 @@ async function helpWithText(fr){
 }
 
 function toggleAuto(){
-  autoMode=!autoMode;
-  document.getElementById('autoBtn').classList.toggle('on', autoMode);
-  toast(autoMode?'Mains libres : le micro se relance tout seul':'Mains libres désactivé');
+  const c=S.cfg; c.hands = !c.hands; S.cfg=c;
+  document.getElementById('autoBtn').classList.toggle('on', c.hands);
+  toast(c.hands ? 'Mains libres : le micro se relance seul après chaque réponse'
+                : 'Micro manuel : à toi d’appuyer pour parler');
 }
 
 /* ============================================================
@@ -1221,6 +1264,7 @@ function fillSettings(){
   document.getElementById('setCtx').value=c.ctx;
   document.getElementById('setCorr').value=c.corr;
   document.getElementById('setStt').value=c.stt;
+  document.getElementById('setAutostop').value = c.autostop===false?'0':'1';
   document.getElementById('setRate').value=c.rate;
   document.getElementById('rateLbl').textContent=c.rate+'×';
   loadVoices();
@@ -1237,7 +1281,8 @@ function saveSettings(){
     voice:document.getElementById('setVoice').value,
     rate:+document.getElementById('setRate').value,
     corr:document.getElementById('setCorr').value,
-    stt:document.getElementById('setStt').value
+    stt:document.getElementById('setStt').value,
+    autostop:document.getElementById('setAutostop').value==='1'
   });
   toast('Enregistré'); go('sHome');
 }
@@ -1336,7 +1381,7 @@ loadVoices();
 document.querySelectorAll('[data-ic]').forEach(el=>{
   if(!el.querySelector('svg')) el.insertAdjacentHTML('afterbegin', ic(el.dataset.ic, el.classList.contains('icbtn')?21:22));
 });
-document.getElementById('autoBtn').classList.add('on');
+document.getElementById('autoBtn').classList.toggle('on', handsFree());
 paintMic();
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js')
