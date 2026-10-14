@@ -265,12 +265,12 @@ a{color:var(--blue)}
       <button class="btn sm" data-ic="arrow" onclick="sendTyped()" style="display:flex;align-items:center;padding:10px 15px"></button>
     </div>
     <div class="lvl" id="lvl"><i id="lvlFill"></i></div>
-    <div class="livebox" id="live">Appuie sur le micro et parle</div>
+    <div class="livebox" id="live">Maintiens le micro et parle</div>
     <div class="miczone">
       <div class="side">
         <button data-ic="help" onclick="stuck()"></button><span>Bloqué<br>(parle FR)</span>
       </div>
-      <button class="mic" id="mic" onclick="toggleMic()"></button>
+      <button class="mic" id="mic"></button>
       <div class="side">
         <button data-ic="loop" id="autoBtn" onclick="toggleAuto()"></button><span>Mains<br>libres</span>
       </div>
@@ -578,6 +578,7 @@ const handsFree = ()=> S.cfg.hands===true;
    le début de la phrase. */
 let aCtx=null, aStream=null, aNode=null, aGain=null, pcm=[], aRate=48000;
 let capturing=false, hasSpeech=false, silStart=null, level=0, lvlRaf=null;
+let holdMode=false, pttWanted=false, pressAt=0;
 
 async function ensureMic(){
   if(aCtx && aStream && aStream.active){
@@ -606,7 +607,7 @@ async function ensureMic(){
     if(!capturing) return;
     pcm.push(new Float32Array(d));
     if(rms > 0.013){ hasSpeech=true; silStart=null; }
-    else if(hasSpeech && S.cfg.autostop!==false){
+    else if(hasSpeech && !holdMode && S.cfg.autostop!==false){
       if(!silStart) silStart = Date.now();
       else if(Date.now()-silStart > 2000) stopListen();
     }
@@ -699,7 +700,7 @@ function stopRec(){
 }
 function submitSpeech(){
   const t=finalBuf.trim(); finalBuf='';
-  document.getElementById('live').textContent='Appuie sur le micro et parle';
+  document.getElementById('live').textContent='Maintiens le micro et parle';
   if(!t) return;
   if(curLang==='fr'){ helpWithText(t); return; }
   addMe(t); sess.userWords += t.split(/\s+/).length; updMeta();
@@ -708,21 +709,56 @@ function submitSpeech(){
 }
 
 /* ---------- commandes unifiées ---------- */
-async function startListen(lang){
+async function startListen(lang, hold){
   if(busy || listening) return;
   stopSpeak();
-  curLang = lang||'en';
+  curLang = lang||'en'; holdMode = !!hold;
   if(S.cfg.stt==='browser'){
     document.getElementById('live').textContent = curLang==='fr'?'Dis-le en français…':'Je t’écoute…';
     startRec(curLang==='fr'?'fr-FR':'en-US'); return;
   }
   const ok = await ensureMic();
-  if(!ok){ document.getElementById('live').textContent='Appuie sur le micro et parle'; paintMic(); return; }
+  if(!ok){ document.getElementById('live').textContent='Maintiens le micro et parle'; paintMic(); return; }
   pcm=[]; hasSpeech=false; silStart=null;
   capturing=true; listening=true; speakStart=Date.now();
   document.getElementById('live').textContent =
     curLang==='fr' ? 'Dis-le en français…' : 'Je t’écoute…';
   lvlOn(true); paintMic();
+}
+
+/* ---- talkie-walkie ----
+   maintien = on parle tant que le doigt reste posé.
+   tape brève = le micro reste ouvert jusqu'à la tape suivante, pour les
+   réponses longues où tenir le doigt est pénible.                     */
+async function pttDown(){
+  if(busy) return;
+  if(listening){ stopListen(); return; }   // on referme un micro verrouillé
+  pressAt=Date.now(); pttWanted=true;
+  await startListen('en', true);
+  if(!pttWanted && listening) stopListen(); // relâché avant que le micro soit prêt
+}
+function pttUp(){
+  if(!pttWanted) return;
+  pttWanted=false;
+  const quick = Date.now()-pressAt < 350;
+  if(!listening) return;
+  if(quick){                                // tape brève : on verrouille
+    holdMode=false; hasSpeech=false; silStart=null;
+    document.getElementById('live').textContent='Micro verrouillé — tape pour envoyer';
+    paintMic(); toast('Micro verrouillé. Tape pour envoyer.');
+  }else stopListen();
+}
+function bindMic(){
+  const m=document.getElementById('mic');
+  m.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    try{ m.setPointerCapture(e.pointerId); }catch(_){}
+    pttDown();
+  });
+  const up = e=>{ e.preventDefault(); pttUp(); };
+  m.addEventListener('pointerup', up);
+  m.addEventListener('pointercancel', up);
+  m.addEventListener('contextmenu', e=>e.preventDefault());
 }
 function stopListen(){
   if(S.cfg.stt==='browser'){ stopRec(); return; }
@@ -731,13 +767,14 @@ function stopListen(){
   if(speakStart){ sess.talkMs += Date.now()-speakStart; speakStart=0; }
   const chunks=pcm, rate=aRate; pcm=[];
   lvlOn(false); paintMic();
-  document.getElementById('live').textContent='Appuie sur le micro et parle';
+  document.getElementById('live').textContent='Maintiens le micro et parle';
+  holdMode=false;
   if(!chunks.length) return;
   const w = pcmToWav(chunks, rate, 16000);
-  if(w.seconds < 0.6){ toast('Trop court — garde le micro ouvert le temps de parler'); return; }
+  if(w.seconds < 0.6){ toast('Trop court — garde le doigt posé le temps de parler'); return; }
   if(curLang==='fr') helpWithAudio(w.b64); else turnWithAudio(w.b64);
 }
-function toggleMic(){ if(listening) stopListen(); else startListen('en'); }
+function toggleMic(){ if(listening) stopListen(); else startListen('en', false); }
 function paintMic(){
   const m=document.getElementById('mic');
   m.className='mic'+(busy?' off':'')+(listening?' live':'');
@@ -767,7 +804,7 @@ function speak(text, done){
   speaking=true;
   u.onend = ()=>{ speaking=false; done&&done(); };
   u.onerror = ()=>{ speaking=false; done&&done(); };
-  setTimeout(()=>{ try{speechSynthesis.speak(u);}catch(e){ speaking=false; done&&done(); } },90);
+  setTimeout(()=>{ try{speechSynthesis.speak(u);}catch(e){ speaking=false; done&&done(); } },25);
 }
 
 /* ============================================================
@@ -802,11 +839,12 @@ function startChat(i){
   sess = {id:uid(), scen:sc, hist:[], start:Date.now(), talkMs:0, userWords:0, turns:0, corrections:[], exprs:[]};
   document.getElementById('chatTitle').textContent = sc.t;
   document.getElementById('chatBody').innerHTML='';
-  document.getElementById('live').textContent='Appuie sur le micro et parle';
+  document.getElementById('live').textContent='Maintiens le micro et parle';
   document.getElementById('typebar').style.display='none';
   updMeta();
   go('sChat');
   document.getElementById('autoBtn').classList.toggle('on', handsFree());
+bindMic();
   if(S.cfg.stt!=='browser') ensureMic();   // permission + contexte audio prêts d'avance
   addSys(sc.d);
   turn([{role:'user',parts:[{text:'(The learner has just opened the app. Greet them briefly, set the scene in one sentence if needed, and ask your first question.)'}]}]);
@@ -927,7 +965,7 @@ async function turnWithAudio(b64){
 function applyTurn(r){
   sess.turns++;
   sess.hist.push({role:'model',parts:[{text:JSON.stringify({reply:r.reply})}]});
-  if(sess.hist.length>40) sess.hist.splice(1,2);
+  while(sess.hist.length>24) sess.hist.splice(1,2);
   updMeta();
   const c = S.cfg.corr;
   if(r.correction && r.correction.said && r.correction.better && c!=='none'){
@@ -944,7 +982,7 @@ function applyTurn(r){
   busy=false; paintMic();
   speak(r.reply, ()=>{
     if(handsFree() && !r.needsTyping && document.getElementById('sChat').classList.contains('on'))
-      startListen('en');
+      startListen('en', false);
   });
 }
 
@@ -993,7 +1031,7 @@ function keepWord(en,fr){ addExpr({en,fr}); closeModal(); toast('Ajouté à tes 
 function stuck(){
   if(listening) stopListen();
   toast('Dis en français ce que tu veux dire');
-  setTimeout(()=>startListen('fr'), 400);
+  setTimeout(()=>startListen('fr', false), 400);
 }
 function helpOut(r){
   addSys(r.fr,'help');
@@ -1002,7 +1040,7 @@ function helpOut(r){
     `<div class="corr"><div class="ttl">${ic('bulb',13)}À dire</div><div class="v">${esc(r.en)}</div><div class="r">${esc(r.note)}</div></div>`);
   b.scrollTop=b.scrollHeight;
   addExpr({en:r.en, fr:r.fr});
-  speak(r.en, ()=>{ toast('Répète-le à voix haute'); if(handsFree()) startListen('en'); });
+  speak(r.en, ()=>{ toast('Répète-le à voix haute'); if(handsFree()) startListen('en', false); });
 }
 const HELP_TASK = fr => `A French-speaking learner is in this situation: ${sess.scen.p}
 They want to say something in English but are stuck.
