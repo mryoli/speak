@@ -360,7 +360,7 @@ a{color:var(--blue)}
 
 <script>
 'use strict';
-const BUILD='2026-10-14 · 9';
+const BUILD='2026-10-14 · 10';
 /* ============================================================
    ICONS — jeu de traits SVG, hérite de currentColor
    ============================================================ */
@@ -539,8 +539,8 @@ function cancelCall(){
   try{ curAbort.abort(); }catch(e){}
 }
 
-async function callModel(model, parts, schema, sys, useThink){
-  const g = { temperature:0.85, maxOutputTokens:2048,
+async function callModel(model, parts, schema, sys, useThink, temp){
+  const g = { temperature:(temp==null?0.85:temp), maxOutputTokens:2048,
               responseMimeType:'application/json', responseSchema:schema };
   if(useThink) g.thinkingConfig = { thinkingLevel:'low' };
   const body = { contents:parts, generationConfig:g };
@@ -565,7 +565,7 @@ async function callModel(model, parts, schema, sys, useThink){
   }finally{ clearTimeout(timer); curAbort=null; }
 }
 
-async function gem(parts, schema, sys){
+async function gem(parts, schema, sys, temp){
   const c = S.cfg;
   if(!c.apiKey) throw new Error('Aucune clé API configurée. Ouvre les réglages.');
   if(!c.model)  throw new Error('Aucun modèle choisi. Ouvre les réglages et recharge la liste.');
@@ -576,7 +576,7 @@ async function gem(parts, schema, sys){
   const tried = [];
 
   for(let guard=0; guard<6; guard++){
-    const res = await callModel(model, parts, schema, sys, useThink);
+    const res = await callModel(model, parts, schema, sys, useThink, temp);
     const r = res.r, d = res.d;
 
     if(r.ok){
@@ -698,11 +698,22 @@ HOW YOU TALK
 1. English only in "reply". Never write French there except to gloss a single word.
 2. "reply" is SHORT — 2 to 3 sentences maximum, ending with a question. The learner must do 70%+ of the talking. Never lecture, never list.
 3. Never stop the conversation to correct. Instead, silently reuse the correct form inside your own reply so the learner hears it naturally (recast).
-4. Be a real interlocutor, not an interviewer: react, challenge, disagree sometimes, ask follow-ups, bring your own opinions. Stay in character for the scenario.
+4. Be a real interlocutor, not an interviewer. Vary your phrasing, openings and reactions across turns — never fall into a repetitive template: react, challenge, disagree sometimes, ask follow-ups, bring your own opinions. Stay in character for the scenario.
 5. Match the learner's level: simple structures for A2/B1, richer register for B2/C1.
 
-AUDIO
-The learner's turn usually arrives as an audio recording. Listen to it and transcribe what they actually said, word for word, into "heard" — including their mistakes, which you must NOT silently fix there. "heard" is what gets shown back to them and what the corrections are based on, so it must be faithful. If the audio is empty or unintelligible, set "heard" to an empty string and ask them in "reply" to repeat. When the turn arrives as text instead, copy that text into "heard" unchanged.
+AUDIO — "heard" IS A TRANSCRIPT, NOT A COMPLETION
+Fill "heard" FIRST, before composing anything else, and treat it as a mechanical transcription task, not a creative one.
+
+Absolute rules for "heard":
+- Write ONLY the words actually present in the audio. Never add, continue, complete, expand, improve or guess a single word.
+- If they said one word, "heard" is that one word. "Yes." stays "Yes." — never "Yes, I think that is a good idea because…". A short answer is a legitimate answer, not an audio you failed to hear fully.
+- Keep their mistakes exactly as spoken: wrong tense, missing article, wrong word. Do NOT repair anything here; that is what "correction" is for.
+- Keep hesitations and restarts when they carry meaning ("I... I think"). Drop only pure filler noise.
+- Never translate. If they spoke French, transcribe the French.
+- If the audio is silent or unintelligible, "heard" is an empty string and "reply" asks them to repeat.
+- When the turn arrives as text instead of audio, copy that text into "heard" character for character.
+
+The learner reads "heard" as the record of what they said. Putting words in their mouth makes the whole app untrustworthy, and every correction derived from invented words is a false correction.
 
 FIELDS
 - recast: when your reply naturally reuses the CORRECT form of something the learner got wrong, copy that fragment of your own "reply" here, VERBATIM — exact same characters, casing and punctuation, so it can be located inside "reply" by a plain substring match. Keep it short: just the corrected phrase, not the whole sentence. It is shown highlighted to the learner, so it must genuinely be the repaired version of their mistake, not a random phrase. If your reply contains no recast, set it to an empty string. Never invent a recast to fill the field.
@@ -1109,7 +1120,7 @@ async function turn(seed){
   if(seed) sess.hist = seed.slice();
   lastSend={kind:'text'};
   let r;
-  try{ r = await gem(sess.hist, SCH_TURN, sysPrompt(sess.scen.p)); }
+  try{ r = await gem(sess.hist, SCH_TURN, sysPrompt(sess.scen.p), 0.45); }
   catch(e){ failTurn(e); return; }
   thinkOff();
   try{ applyTurn(r); }catch(e){ failTurn(e); }
@@ -1125,7 +1136,7 @@ async function turnWithAudio(b64){
     {inlineData:{mimeType:'audio/wav',data:b64}}
   ]}]);
   try{
-    const r = await gem(req, SCH_TURN, sysPrompt(sess.scen.p));
+    const r = await gem(req, SCH_TURN, sysPrompt(sess.scen.p), 0.3);
     thinkOff();
     const heard = (r.heard||'').trim();
     if(heard){ addMe(heard); sess.userWords += heard.split(/\s+/).length; }
