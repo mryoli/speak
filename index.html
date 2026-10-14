@@ -329,7 +329,9 @@ a{color:var(--blue)}
       <option value="none">Aucune — tout au debrief</option>
     </select>
     <div style="margin-top:26px">
-      <h2 style="margin-bottom:4px">Version</h2>
+      <h2 style="margin-bottom:4px">Quotas du jour</h2>
+      <div class="card" id="quotaBox"></div>
+      <h2 style="margin-bottom:4px;margin-top:22px">Version</h2>
       <div class="card" style="display:flex;align-items:center;gap:10px">
         <span style="flex:1;font-size:13.5px">Build <b id="buildLbl">—</b></span>
         <button class="btn ghost sm" onclick="hardRefresh()">Forcer la mise à jour</button>
@@ -358,7 +360,7 @@ a{color:var(--blue)}
 
 <script>
 'use strict';
-const BUILD='2026-10-14 · 8';
+const BUILD='2026-10-14 · 9';
 /* ============================================================
    ICONS — jeu de traits SVG, hérite de currentColor
    ============================================================ */
@@ -460,6 +462,76 @@ function pickDefault(list){
   return list[0]||'';
 }
 
+/* ---------- échelle de repli ----------
+   Liste blanche ordonnée du plus léger au plus capable. On NE cascade PAS
+   sur la liste brute de l'API : elle contient des modèles hors palier
+   gratuit qui échoueraient un par un, chacun coûtant un aller-retour et
+   un renvoi complet de l'audio. */
+const LADDER=[
+  /^gemini-3\.5-flash-lite$/, /^gemini-3\.1-flash-lite$/, /flash-lite$/,
+  /^gemini-3\.6-flash$/, /^gemini-3\.8-flash$/, /^gemini-3-flash/, /flash$/
+];
+const known = () => { try{ return JSON.parse(localStorage.getItem('models')||'[]'); }catch(e){ return []; } };
+
+/* Modèles dont le quota JOURNALIER est épuisé. Les compteurs Google
+   repartent à minuit heure du Pacifique, soit ~08:00 à Abidjan : on calcule
+   ce basculement au lieu d'utiliser la date locale, sinon on retesterait un
+   modèle mort à chaque tour. */
+function pacificDay(){
+  return new Date(Date.now() - 8*3600*1000).toISOString().slice(0,10);
+}
+function burnt(){
+  let m={}; try{ m=JSON.parse(localStorage.getItem('burnt')||'{}'); }catch(e){}
+  const day=pacificDay(); let changed=false;
+  for(const k in m){ if(m[k]!==day){ delete m[k]; changed=true; } }
+  if(changed) localStorage.setItem('burnt',JSON.stringify(m));
+  return m;
+}
+function markBurnt(model){
+  const m=burnt(); m[model]=pacificDay();
+  localStorage.setItem('burnt',JSON.stringify(m));
+}
+function nextModel(current){
+  const list=known(), dead=burnt(), seen=new Set([current]);
+  for(const rx of LADDER){
+    for(const m of list){
+      if(seen.has(m) || dead[m]) continue;
+      if(rx.test(m)) return m;
+    }
+  }
+  return null;
+}
+
+/* Le changement doit être visible : une dégradation silencieuse ferait
+   douter de l'app plutôt que du modèle. */
+function notifySwitch(from, to, why){
+  const b=document.getElementById('chatBody');
+  if(b && document.getElementById('sChat').classList.contains('on')){
+    b.insertAdjacentHTML('beforeend',
+      '<div class="msg sys"><div class="bub">'+ic('loop',14)+
+      '<span>'+esc(from)+' '+(why||'épuisé')+' — passage à '+esc(to)+'</span></div></div>');
+    b.scrollTop=b.scrollHeight;
+  }
+  toast('Modèle changé : '+to);
+}
+
+/* Lecture du 429 : la limite par minute impose d'attendre, celle du jour
+   impose de changer de modèle. Les confondre ferait basculer sur une
+   simple rafale. */
+function readQuota(d){
+  const det = d.error?.details || [];
+  const viol = det.find(x=>/QuotaFailure/.test(x['@type']||''))?.violations?.[0];
+  const retry = det.find(x=>/RetryInfo/.test(x['@type']||''))?.retryDelay;
+  const metric = (viol?.quotaMetric||viol?.quotaId||'').toLowerCase();
+  const secs = retry ? parseInt(retry) : 0;
+  let kind='unknown';
+  if(/per_day|perday|requests_per_day/.test(metric)) kind='day';
+  else if(/per_minute|perminute/.test(metric))       kind='minute';
+  else if(/input_token|tokens/.test(metric))         kind='tokens';
+  if(kind==='unknown') kind = (secs && secs<=90) ? 'minute' : 'day';
+  return {kind, secs, limit:viol?.quotaValue||''};
+}
+
 let curAbort=null, userCancelled=false;
 function cancelCall(){
   if(!curAbort) return;
@@ -467,85 +539,94 @@ function cancelCall(){
   try{ curAbort.abort(); }catch(e){}
 }
 
+async function callModel(model, parts, schema, sys, useThink){
+  const g = { temperature:0.85, maxOutputTokens:2048,
+              responseMimeType:'application/json', responseSchema:schema };
+  if(useThink) g.thinkingConfig = { thinkingLevel:'low' };
+  const body = { contents:parts, generationConfig:g };
+  if(sys) body.systemInstruction = { parts:[{text:sys}] };
+
+  const ctrl=new AbortController();
+  curAbort=ctrl; userCancelled=false;
+  const timer=setTimeout(function(){ try{ ctrl.abort(); }catch(e){} }, 60000);
+  try{
+    const r = await fetch(API+'/models/'+model+':generateContent',{
+      method:'POST', signal:ctrl.signal,
+      headers:{'Content-Type':'application/json','x-goog-api-key':S.cfg.apiKey},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json().catch(function(){ return {}; });
+    return {r:r, d:d};
+  }catch(e){
+    if(ctrl.signal.aborted)
+      throw new Error(userCancelled ? 'Annulé.'
+        : 'Pas de réponse au bout de 60 s. Vérifie ta connexion, puis réessaie.');
+    throw new Error('Réseau indisponible : '+(e.message||e));
+  }finally{ clearTimeout(timer); curAbort=null; }
+}
+
 async function gem(parts, schema, sys){
   const c = S.cfg;
   if(!c.apiKey) throw new Error('Aucune clé API configurée. Ouvre les réglages.');
   if(!c.model)  throw new Error('Aucun modèle choisi. Ouvre les réglages et recharge la liste.');
 
-  const build = think => {
-    const g = { temperature:0.85, maxOutputTokens:2048,
-                responseMimeType:'application/json', responseSchema:schema };
-    // Les modèles Gemini 3.x raisonnent avant d'écrire et ce raisonnement
-    // consomme le budget de sortie. On le limite, et on retire le réglage
-    // si le modèle ne le connaît pas.
-    if(think) g.thinkingConfig = { thinkingLevel:'low' };
-    const b = { contents:parts, generationConfig:g };
-    if(sys) b.systemInstruction = { parts:[{text:sys}] };
-    return b;
-  };
+  let model = c.model;
+  let useThink = localStorage.getItem('noThink')!=='1';
+  let switched = 0;
+  const tried = [];
 
-  let useThink = localStorage.getItem('noThink') !== '1';
-  for(let attempt=0; attempt<2; attempt++){
-    const ctrl = new AbortController();
-    curAbort = ctrl; userCancelled = false;
-    const timer = setTimeout(()=>{ try{ ctrl.abort(); }catch(e){} }, 60000);
-    let r, d;
-    try{
-      r = await fetch(`${API}/models/${c.model}:generateContent`,{
-        method:'POST', signal:ctrl.signal,
-        headers:{'Content-Type':'application/json','x-goog-api-key':c.apiKey},
-        body: JSON.stringify(build(useThink))
-      });
-      d = await r.json().catch(()=>({}));
-    }catch(e){
-      if(ctrl.signal.aborted)
-        throw new Error(userCancelled ? 'Annulé.'
-          : 'Pas de réponse au bout de 60 s. Vérifie ta connexion, puis réessaie.');
-      throw new Error('Réseau indisponible : '+(e.message||e));
-    }finally{ clearTimeout(timer); curAbort=null; }
+  for(let guard=0; guard<6; guard++){
+    const res = await callModel(model, parts, schema, sys, useThink);
+    const r = res.r, d = res.d;
 
-    if(!r.ok){
-      const msg = d.error?.message || `HTTP ${r.status}`;
-      if(useThink && r.status===400 && /thinking|unknown name|unsupported|invalid.*field/i.test(msg)){
-        localStorage.setItem('noThink','1'); useThink=false; continue;
+    if(r.ok){
+      const cand = d.candidates && d.candidates[0];
+      const parts2 = cand && cand.content && cand.content.parts;
+      const txt = parts2 ? parts2.map(function(p){ return p.text; }).filter(Boolean).join('') : '';
+      if(!txt){
+        const fr = (cand && cand.finishReason) || (d.promptFeedback && d.promptFeedback.blockReason);
+        if(fr==='MAX_TOKENS') throw new Error('Réponse coupée avant la fin. Réessaie.');
+        if(fr==='SAFETY' || fr==='PROHIBITED_CONTENT') throw new Error('Réponse bloquée par les filtres de Google. Reformule.');
+        throw new Error('Réponse vide du modèle'+(fr?' ('+fr+')':'')+'.');
       }
-      if(r.status===429){
-        // Google précise la limite franchie et le délai d'attente : on les garde.
-        const det = d.error?.details || [];
-        const viol = det.find(x=>/QuotaFailure/.test(x['@type']||''))?.violations?.[0];
-        const retry = det.find(x=>/RetryInfo/.test(x['@type']||''))?.retryDelay;
-        const metric = (viol?.quotaMetric||viol?.quotaId||'').toLowerCase();
-        let what = 'Quota Gemini atteint';
-        if(/per_day|perday|requests_per_day/.test(metric)) what = 'Quota du jour épuisé sur ce modèle';
-        else if(/per_minute|perminute/.test(metric))       what = 'Trop de requêtes par minute';
-        else if(/input_token|tokens/.test(metric))         what = 'Quota de tokens atteint';
-        const secs = retry ? parseInt(retry) : 0;
-        throw new Error(`${what} (${c.model}).`
-          + (secs ? ` Réessaie dans ${secs<60?secs+' s':Math.ceil(secs/60)+' min'}.` : '')
-          + ' Les quotas sont comptés par modèle : bascule sur un modèle flash-lite dans les réglages pour continuer tout de suite.'
-          + (viol?.quotaValue ? ` Limite : ${viol.quotaValue}.` : ''));
+      if(model !== c.model){ const n=S.cfg; n.model=model; S.cfg=n; }
+      try{ return JSON.parse(txt); }
+      catch(e){
+        const m = txt.match(/\{[\s\S]*\}/);
+        if(m){ try{ return JSON.parse(m[0]); }catch(_){} }
+        throw new Error('Réponse illisible du modèle.');
       }
-      if(r.status===401 || r.status===403) throw new Error('Clé API refusée. Vérifie-la dans les réglages.');
-      if(r.status===404) throw new Error(`Modèle « ${c.model} » introuvable. Recharge la liste des modèles dans les réglages.`);
-      throw new Error(msg);
     }
 
-    const cand = d.candidates?.[0];
-    const txt = cand?.content?.parts?.map(p=>p.text).filter(Boolean).join('') || '';
-    if(!txt){
-      const fr = cand?.finishReason || d.promptFeedback?.blockReason;
-      if(fr==='MAX_TOKENS') throw new Error('Réponse coupée avant la fin. Réessaie.');
-      if(fr==='SAFETY' || fr==='PROHIBITED_CONTENT') throw new Error('Réponse bloquée par les filtres de Google. Reformule.');
-      throw new Error('Réponse vide du modèle'+(fr?` (${fr})`:'')+'.');
+    const msg = (d.error && d.error.message) || ('HTTP '+r.status);
+
+    if(useThink && r.status===400 && /thinking|unknown name|unsupported|invalid.*field/i.test(msg)){
+      localStorage.setItem('noThink','1'); useThink=false; continue;
     }
-    try{ return JSON.parse(txt); }
-    catch(e){
-      const m = txt.match(/\{[\s\S]*\}/);
-      if(m){ try{ return JSON.parse(m[0]); }catch(_){} }
-      throw new Error('Réponse illisible du modèle.');
+
+    if(r.status===429){
+      const q = readQuota(d);
+      if(q.kind==='minute'){
+        throw new Error('Trop de requêtes par minute sur '+model+'.'
+          + (q.secs ? ' Réessaie dans '+q.secs+' s.' : ' Réessaie dans quelques secondes.'));
+      }
+      markBurnt(model); tried.push(model);
+      const nxt = (switched<2) ? nextModel(model) : null;
+      if(nxt){ switched++; notifySwitch(model, nxt); model = nxt; continue; }
+      throw new Error('Quota du jour épuisé sur '+tried.join(', ')+'.'
+        + ' Aucun autre modèle disponible. Les compteurs repartent vers 8h du matin.'
+        + ' Pour continuer aujourd’hui, active la facturation sur ton projet Google.');
     }
+
+    if(r.status===404 && switched<2){
+      const nxt = nextModel(model);
+      if(nxt){ switched++; notifySwitch(model, nxt, 'introuvable'); model = nxt; continue; }
+    }
+    if(r.status===401 || r.status===403) throw new Error('Clé API refusée. Vérifie-la dans les réglages.');
+    if(r.status===404) throw new Error('Modèle « '+model+' » introuvable. Recharge la liste des modèles dans les réglages.');
+    throw new Error(msg);
   }
-  throw new Error('Échec après deux tentatives.');
+  throw new Error('Trop de tentatives sans réponse exploitable.');
 }
 
 /* schemas */
@@ -927,7 +1008,8 @@ function updMeta(){
   if(!sess) return;
   const min = Math.round((Date.now()-sess.start)/60000);
   const talk = Math.round(sess.talkMs/1000);
-  document.getElementById('chatMeta').textContent = `${min} min · ${sess.userWords} mots dits · ${talk}s de parole`;
+  document.getElementById('chatMeta').textContent =
+    `${min} min · ${sess.userWords} mots · ${talk}s · ${S.cfg.model}`;
   const total = (Date.now()-sess.start)/1000;
   document.getElementById('talkBar').style.width = Math.min(100, total?(sess.talkMs/1000/total*100):0)+'%';
 }
@@ -1397,6 +1479,7 @@ function fillSettings(){
   document.getElementById('setCorr').value=c.corr;
   document.getElementById('setStt').value=c.stt;
   document.getElementById('buildLbl').textContent=BUILD;
+  renderQuota();
   document.getElementById('setAutostop').value = c.autostop===false?'0':'1';
   document.getElementById('setRate').value=c.rate;
   document.getElementById('rateLbl').textContent=c.rate+'×';
@@ -1480,6 +1563,31 @@ async function doInstall(){
   deferredPrompt=null; paintInstall();
 }
 
+function renderQuota(){
+  const box=document.getElementById('quotaBox');
+  if(!box) return;
+  const dead=burnt(), list=known(), cur=S.cfg.model;
+  const ordered=[];
+  for(const rx of LADDER) for(const m of list)
+    if(rx.test(m) && ordered.indexOf(m)<0) ordered.push(m);
+  if(cur && ordered.indexOf(cur)<0) ordered.unshift(cur);
+  if(!ordered.length){
+    box.innerHTML='<div class="diag"><span class="wait">Liste des modèles non chargée. Appuie sur « Recharger la liste ».</span></div>';
+    return;
+  }
+  box.innerHTML = ordered.slice(0,6).map(m=>{
+    const ko=!!dead[m];
+    return `<div class="diag">
+      <span class="s ${ko?'no':'ok'}">${ic(ko?'close':'check',17)}</span>
+      <span style="flex:1">${esc(m)}${m===cur?' <span class="pill n">actif</span>':''}
+        ${ko?'<span style="display:block;font-size:12px;color:var(--faint)">quota du jour épuisé</span>':''}</span>
+    </div>`;
+  }).join('')
+  + '<div style="font-size:12px;color:var(--faint);margin-top:9px;line-height:1.4">'
+  + 'En cas de quota épuisé, l\u2019app bascule seule vers le modèle disponible suivant. '
+  + 'Les compteurs repartent vers 8h du matin.</div>';
+}
+
 async function renderDiag(){
   const box=document.getElementById('diagBox');
   if(!box) return;
@@ -1551,6 +1659,17 @@ document.querySelectorAll('[data-ic]').forEach(el=>{
 });
 document.getElementById('autoBtn').classList.toggle('on', handsFree());
 paintMic();
+/* liste des modèles rafraîchie en silence au démarrage : l'auto-switch en
+   dépend, et elle peut dater d'une version antérieure de l'app */
+(async ()=>{
+  const c=S.cfg;
+  if(!c.apiKey) return;
+  try{
+    const list = await listModels(c.apiKey);
+    if(list.length) localStorage.setItem('models', JSON.stringify(list));
+  }catch(e){}
+})();
+
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js')
     .then(()=>{ swErr=null; })
