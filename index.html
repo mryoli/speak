@@ -90,6 +90,17 @@ a{color:var(--blue)}
   display:flex;align-items:center;gap:5px}
 .mtools button:active{color:var(--accent);border-color:var(--accent-dim)}
 .fr{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line);font-size:14px;color:var(--dim);font-style:italic}
+/* palier 1 : on écoute, rien à lire */
+.veil{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:14px;cursor:pointer;
+  padding:2px 0;user-select:none;-webkit-user-select:none}
+.veil .bars{display:flex;align-items:flex-end;gap:3px;height:17px;flex:0 0 auto}
+.veil .bars i{width:3px;background:var(--accent);border-radius:2px;opacity:.5;height:40%}
+.msg.ai.playing .veil .bars i{animation:eq .9s ease-in-out infinite}
+.msg.ai.playing .veil .bars i:nth-child(2){animation-delay:.15s}
+.msg.ai.playing .veil .bars i:nth-child(3){animation-delay:.3s}
+.msg.ai.playing .veil .bars i:nth-child(4){animation-delay:.45s}
+@keyframes eq{0%,100%{height:30%;opacity:.45}50%{height:100%;opacity:1}}
+.veil b{font-weight:600;color:var(--dim)}
 .corr{background:rgba(167,139,250,.09);border:1px solid var(--accent-dim);border-radius:12px;padding:11px 13px;margin-bottom:16px;font-size:14px}
 .corr .ttl{font-size:10.5px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;
   margin-bottom:7px;display:flex;align-items:center;gap:5px}
@@ -322,6 +333,14 @@ a{color:var(--blue)}
       <option value="1">S'arrête seul après 2 s de silence</option>
       <option value="0">Je coupe le micro moi-même</option>
     </select>
+    <label>Texte des réponses</label>
+    <select id="setReveal">
+      <option value="delayed">Masqué — écouter d'abord, taper pour lire (recommandé)</option>
+      <option value="always">Toujours affiché</option>
+    </select>
+    <p class="hint">Texte et audio en même temps, l'œil gagne toujours : on croit comprendre à l'oral alors qu'on lit. Masqué, l'ordre devient écouter → réécouter lentement → lire pour vérifier.</p>
+    <label>Vitesse du mode lent : <span id="slowLbl"></span></label>
+    <input id="setSlow" type="range" min="0.4" max="0.9" step="0.05" style="padding:0">
     <label>Correction</label>
     <select id="setCorr">
       <option value="recast">Discrète pendant la conversation (recommandé)</option>
@@ -360,7 +379,7 @@ a{color:var(--blue)}
 
 <script>
 'use strict';
-const BUILD='2026-10-14 · 10';
+const BUILD='2026-10-14 · 11';
 /* ============================================================
    ICONS — jeu de traits SVG, hérite de currentColor
    ============================================================ */
@@ -403,7 +422,7 @@ function ic(n,sz,cls){
 /* ============================================================
    STORE
    ============================================================ */
-const DEF = {apiKey:'',model:'',level:'',ctx:'',voice:'',rate:0.92,corr:'recast',stt:'gemini',hands:false,autostop:true};
+const DEF = {apiKey:'',model:'',level:'',ctx:'',voice:'',rate:0.92,corr:'recast',stt:'gemini',hands:false,autostop:true,reveal:'delayed',slow:0.65};
 const S = {
   get cfg(){ return Object.assign({},DEF,JSON.parse(localStorage.getItem('cfg')||'{}')); },
   set cfg(v){ localStorage.setItem('cfg',JSON.stringify(v)); },
@@ -699,7 +718,11 @@ HOW YOU TALK
 2. "reply" is SHORT — 2 to 3 sentences maximum, ending with a question. The learner must do 70%+ of the talking. Never lecture, never list.
 3. Never stop the conversation to correct. Instead, silently reuse the correct form inside your own reply so the learner hears it naturally (recast).
 4. Be a real interlocutor, not an interviewer. Vary your phrasing, openings and reactions across turns — never fall into a repetitive template: react, challenge, disagree sometimes, ask follow-ups, bring your own opinions. Stay in character for the scenario.
-5. Match the learner's level: simple structures for A2/B1, richer register for B2/C1.
+5. LISTENING-FIRST CONSTRAINT. The learner hears you before reading you, and often without reading you at all. Your reply must be understandable by EAR on first listening at their level:
+   - A2/B1: everyday high-frequency vocabulary, short main clauses, no subordinate stacking, no idioms the learner has not met, no rare phrasal verbs. One idea per sentence.
+   - B2/C1: natural register and idioms are welcome, but still spoken English — the kind of sentence someone actually says out loud, not written prose read aloud.
+   - At every level: no parenthetical asides, no lists inside a sentence, no sentence longer than roughly 20 words. Put the question at the end, where it is easiest to catch.
+   - A learner who must read your reply to understand it has been failed by that reply.
 
 AUDIO — "heard" IS A TRANSCRIPT, NOT A COMPLETION
 Fill "heard" FIRST, before composing anything else, and treat it as a mechanical transcription task, not a creative one.
@@ -950,18 +973,27 @@ function loadVoices(){
   fill(document.getElementById('setVoice'));
 }
 speechSynthesis.onvoiceschanged = loadVoices;
-function stopSpeak(){ speaking=false; try{speechSynthesis.cancel();}catch(e){} }
-function speak(text, done){
+function stopSpeak(){ speaking=false; markPlaying(null); try{speechSynthesis.cancel();}catch(e){} }
+let playingId=null;
+function markPlaying(id){
+  if(playingId){ const o=document.getElementById(playingId); if(o) o.classList.remove('playing'); }
+  playingId=id;
+  if(id){ const e=document.getElementById(id); if(e) e.classList.add('playing'); }
+}
+function speak(text, done, rate, id){
   stopSpeak();
   if(!text){ done&&done(); return; }
   const c=S.cfg, u=new SpeechSynthesisUtterance(text);
   const v = voices.find(x=>x.voiceURI===c.voice) || voices[0];
   if(v) u.voice=v;
-  u.lang = v?v.lang:'en-US'; u.rate = c.rate||0.92; u.pitch = 1;
+  u.lang = v?v.lang:'en-US';
+  u.rate = rate || c.rate || 0.92;
+  u.pitch = 1;
   speaking=true;
-  u.onend = ()=>{ speaking=false; done&&done(); };
-  u.onerror = ()=>{ speaking=false; done&&done(); };
-  setTimeout(()=>{ try{speechSynthesis.speak(u);}catch(e){ speaking=false; done&&done(); } },25);
+  markPlaying(id||null);
+  const fin = ()=>{ speaking=false; markPlaying(null); done&&done(); };
+  u.onend = fin; u.onerror = fin;
+  setTimeout(()=>{ try{speechSynthesis.speak(u);}catch(e){ fin(); } },25);
 }
 
 /* ============================================================
@@ -1045,25 +1077,49 @@ function tokenize(t){
     return esc(tok.slice(0,i)) + `<span class="w" data-w="${esc(core)}">${esc(core)}</span>` + esc(tok.slice(i+core.length));
   }).join('');
 }
+function renderBody(t, recast){
+  const i = (recast && recast.length>1) ? t.indexOf(recast) : -1;
+  if(i>=0) return tokenize(t.slice(0,i))
+                + `<b class="recast">${tokenize(recast)}</b>`
+                + tokenize(t.slice(i+recast.length));
+  return tokenize(t);
+}
+function wireWords(el){
+  el.querySelectorAll('.w').forEach(w=>w.onclick=()=>word(w.dataset.w, el.dataset.en));
+}
+/* Le texte est masqué par défaut : lu en même temps qu'entendu, l'œil gagne
+   toujours et la compréhension orale ne progresse pas. L'ordre voulu est
+   écouter → réécouter lentement → seulement ensuite lire. */
 function addAI(t, recast){
   const b=document.getElementById('chatBody'), id='m'+uid();
-  let inner;
-  const i = (recast && recast.length>1) ? t.indexOf(recast) : -1;
-  if(i>=0) inner = tokenize(t.slice(0,i))
-                 + `<b class="recast">${tokenize(recast)}</b>`
-                 + tokenize(t.slice(i+recast.length));
-  else inner = tokenize(t);
+  const hidden = S.cfg.reveal==='delayed';
   b.insertAdjacentHTML('beforeend',
-    `<div class="msg ai" id="${id}"><div class="bub">${inner}</div>
+    `<div class="msg ai${hidden?' veiled':''}" id="${id}">
+       <div class="bub">${hidden
+         ? `<div class="veil" onclick="reveal('${id}')">
+              <span class="bars"><i></i><i></i><i></i><i></i></span>
+              <span>Écoute. <b>Tape pour lire.</b></span>
+            </div>`
+         : renderBody(t,recast)}</div>
      <div class="mtools">
        <button onclick="replay('${id}')">${ic('sound',14)}Réécouter</button>
+       <button onclick="replaySlow('${id}')">${ic('sound',14)}Lentement</button>
        <button onclick="transl('${id}')">${ic('lang',14)}FR</button>
      </div></div>`);
   const el = document.getElementById(id);
   el.dataset.en = t;
-  el.querySelectorAll('.w').forEach(w=>w.onclick=()=>word(w.dataset.w, t));
+  el.dataset.recast = recast || '';
+  if(!hidden) wireWords(el);
   b.scrollTop=b.scrollHeight;
   return id;
+}
+/* une fois dévoilé, le texte le reste : on doit pouvoir relire le fil */
+function reveal(id){
+  const el=document.getElementById(id);
+  if(!el || !el.classList.contains('veiled')) return;
+  el.classList.remove('veiled');
+  el.querySelector('.bub').innerHTML = renderBody(el.dataset.en, el.dataset.recast);
+  wireWords(el);
 }
 function addCorr(c){
   const b=document.getElementById('chatBody');
@@ -1159,22 +1215,31 @@ function applyTurn(r){
     if(c==='explicit') addCorr(r.correction);
   }
   (r.expressions||[]).forEach(e=>{ if(e.en) sess.exprs.push(e); });
-  addAI(r.reply, (r.recast||'').trim());
+  const mid = addAI(r.reply, (r.recast||'').trim());
   if(r.needsTyping && r.typingPrompt){
     addSys(r.typingPrompt,'pencil');
     document.getElementById('typebar').style.display='flex';
+    reveal(mid);          // on ne peut pas écrire une réponse qu'on n'a pas lue
   }
   busy=false; paintMic();
   speak(r.reply, ()=>{
     if(handsFree() && !r.needsTyping && document.getElementById('sChat').classList.contains('on'))
       startListen('en', false);
-  });
+  }, null, mid);
 }
 
-function replay(id){ const el=document.getElementById(id); if(el) speak(el.dataset.en); }
+function replay(id){
+  const el=document.getElementById(id);
+  if(el) speak(el.dataset.en, null, null, id);
+}
+function replaySlow(id){
+  const el=document.getElementById(id);
+  if(el) speak(el.dataset.en, null, S.cfg.slow||0.65, id);
+}
 
 async function transl(id){
   const el=document.getElementById(id);
+  reveal(id);
   if(el.querySelector('.fr')) { el.querySelector('.fr').remove(); return; }
   el.querySelector('.bub').insertAdjacentHTML('beforeend','<div class="fr">…</div>');
   try{
@@ -1225,7 +1290,7 @@ function helpOut(r){
     `<div class="corr"><div class="ttl">${ic('bulb',13)}À dire</div><div class="v">${esc(r.en)}</div><div class="r">${esc(r.note)}</div></div>`);
   b.scrollTop=b.scrollHeight;
   addExpr({en:r.en, fr:r.fr});
-  speak(r.en, ()=>{ toast('Répète-le à voix haute'); if(handsFree()) startListen('en', false); });
+  speak(r.en, ()=>{ toast('Répète-le à voix haute'); if(handsFree()) startListen('en', false); }, S.cfg.slow||0.65);
 }
 const HELP_TASK = fr => `A French-speaking learner is in this situation: ${sess.scen.p}
 They want to say something in English but are stuck.
@@ -1489,6 +1554,9 @@ function fillSettings(){
   document.getElementById('setCtx').value=c.ctx;
   document.getElementById('setCorr').value=c.corr;
   document.getElementById('setStt').value=c.stt;
+  document.getElementById('setReveal').value=c.reveal;
+  document.getElementById('setSlow').value=c.slow;
+  document.getElementById('slowLbl').textContent=(+c.slow).toFixed(2)+'×';
   document.getElementById('buildLbl').textContent=BUILD;
   renderQuota();
   document.getElementById('setAutostop').value = c.autostop===false?'0':'1';
@@ -1498,6 +1566,9 @@ function fillSettings(){
 }
 document.getElementById('setRate').addEventListener('input',e=>{
   document.getElementById('rateLbl').textContent=(+e.target.value).toFixed(2)+'×';
+});
+document.getElementById('setSlow').addEventListener('input',e=>{
+  document.getElementById('slowLbl').textContent=(+e.target.value).toFixed(2)+'×';
 });
 function saveSettings(){
   S.cfg = Object.assign(S.cfg,{
@@ -1509,6 +1580,8 @@ function saveSettings(){
     rate:+document.getElementById('setRate').value,
     corr:document.getElementById('setCorr').value,
     stt:document.getElementById('setStt').value,
+    reveal:document.getElementById('setReveal').value,
+    slow:+document.getElementById('setSlow').value,
     autostop:document.getElementById('setAutostop').value==='1'
   });
   toast('Enregistré'); go('sHome');
