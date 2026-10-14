@@ -147,6 +147,16 @@ a{color:var(--blue)}
 @keyframes up{from{transform:translateY(100%)}}
 .sheet h3{margin:0 0 4px;font-size:24px;letter-spacing:-.01em}
 .sheet .ipa{color:var(--faint);font-size:14px;margin-bottom:14px}
+.install{display:none;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 14px;margin-bottom:18px;
+  background:linear-gradient(135deg,rgba(167,139,250,.16),rgba(124,92,224,.08));
+  border:1px solid var(--accent-dim);border-radius:var(--r)}
+.install.on{display:flex}
+.install b{display:block;font-size:14.5px;font-weight:620}
+.install span{font-size:12.5px;color:var(--dim)}
+.diag{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.diag:last-child{border-bottom:none}
+.diag .s{flex:0 0 auto;display:flex}
+.diag .ok{color:var(--ok)} .diag .no{color:var(--bad)} .diag .wait{color:var(--faint)}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--surface2);
   border:1px solid var(--line);padding:11px 18px;border-radius:99px;font-size:14px;z-index:99;
   opacity:0;pointer-events:none;transition:opacity .25s;max-width:86%;text-align:center}
@@ -215,6 +225,10 @@ a{color:var(--blue)}
     <button class="icbtn" data-ic="gear" onclick="go('sSettings')"></button>
   </div>
   <div class="body">
+    <button class="install" id="installBar" onclick="doInstall()">
+      <span style="color:var(--accent);display:flex"></span>
+      <span style="flex:1"><b>Installer Speak</b><span>Ouvre-la depuis ton écran d'accueil, sans la barre du navigateur</span></span>
+    </button>
     <div class="stats">
       <div class="stat"><b id="stStreak">0</b><span>jours</span></div>
       <div class="stat"><b id="stMin">0</b><span>min parlées</span></div>
@@ -303,7 +317,12 @@ a{color:var(--blue)}
       <option value="explicit">Affichée immédiatement à chaque faute</option>
       <option value="none">Aucune — tout au debrief</option>
     </select>
-    <div style="margin-top:28px">
+    <div style="margin-top:26px">
+      <h2 style="margin-bottom:4px">Installation</h2>
+      <div class="card" id="diagBox"><div class="diag"><span class="wait">Analyse…</span></div></div>
+      <button class="btn sec" id="diagInstall" style="display:none;margin-bottom:10px" onclick="doInstall()">Installer l'application</button>
+    </div>
+    <div style="margin-top:22px">
       <button class="btn sec" onclick="saveSettings()">Enregistrer</button>
       <div class="row" style="margin-top:10px">
         <button class="btn ghost sm" onclick="exportData()" style="flex:1">Exporter</button>
@@ -388,9 +407,9 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&l
 function go(id){
   document.querySelectorAll('.screen').forEach(e=>e.classList.remove('on'));
   document.getElementById(id).classList.add('on');
-  if(id==='sHome') renderHome();
+  if(id==='sHome'){ renderHome(); paintInstall(); }
   if(id==='sProgress') renderProgress();
-  if(id==='sSettings') fillSettings();
+  if(id==='sSettings'){ fillSettings(); renderDiag(); }
   window.scrollTo(0,0);
 }
 let tT;
@@ -1248,6 +1267,67 @@ function importData(input){
 }
 
 /* ============================================================
+   PWA — installation et diagnostic
+   ============================================================ */
+let deferredPrompt=null, manifestOk=null, swErr=null, installed=false;
+
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault(); deferredPrompt=e; paintInstall();
+});
+window.addEventListener('appinstalled', ()=>{
+  deferredPrompt=null; installed=true; paintInstall(); toast('Speak est installée');
+});
+
+function isStandalone(){
+  return matchMedia('(display-mode: standalone)').matches
+      || matchMedia('(display-mode: minimal-ui)').matches
+      || navigator.standalone===true;
+}
+function paintInstall(){
+  const bar=document.getElementById('installBar');
+  const show = !!deferredPrompt && !isStandalone();
+  if(bar){
+    bar.classList.toggle('on', show);
+    const slot=bar.firstElementChild;
+    if(slot && !slot.querySelector('svg')) slot.innerHTML=ic('download',22);
+  }
+  const b=document.getElementById('diagInstall');
+  if(b) b.style.display = show?'block':'none';
+}
+async function doInstall(){
+  if(!deferredPrompt){ toast("Chrome n'a pas encore proposé l'installation — voir Réglages."); return; }
+  deferredPrompt.prompt();
+  const r = await deferredPrompt.userChoice.catch(()=>({outcome:'dismissed'}));
+  if(r.outcome!=='accepted') toast('Installation annulée');
+  deferredPrompt=null; paintInstall();
+}
+
+async function renderDiag(){
+  const box=document.getElementById('diagBox');
+  if(!box) return;
+  let reg=null;
+  try{ reg = await navigator.serviceWorker.getRegistration(); }catch(e){}
+  if(manifestOk===null){
+    try{ const r=await fetch('manifest.json',{cache:'no-store'}); manifestOk=r.ok; }
+    catch(e){ manifestOk=false; }
+  }
+  const rows=[
+    ['Connexion sécurisée (HTTPS)', location.protocol==='https:', 'Obligatoire. GitHub Pages le fournit.'],
+    ['Manifeste accessible', manifestOk===true, 'Le fichier manifest.json doit être servi à côté de la page.'],
+    ['Service worker enregistré', !!reg, swErr || 'Il s’enregistre au chargement de la page.'],
+    ['Service worker actif', !!navigator.serviceWorker.controller, 'Devient actif au second chargement. Recharge une fois.'],
+    ['Invite d’installation reçue', !!deferredPrompt, 'Chrome ne l’émet qu’une fois tous les critères remplis.'],
+    ['Déjà installée', isStandalone()||installed, '']
+  ];
+  box.innerHTML = rows.map(([label,ok,hint])=>
+    `<div class="diag">
+       <span class="s ${ok?'ok':'no'}">${ic(ok?'check':'close',17)}</span>
+       <span style="flex:1">${esc(label)}${(!ok&&hint)?`<span style="display:block;font-size:12px;color:var(--faint);line-height:1.35;margin-top:2px">${esc(hint)}</span>`:''}</span>
+     </div>`).join('');
+  paintInstall();
+}
+
+/* ============================================================
    BOOT
    ============================================================ */
 document.getElementById('typeIn').addEventListener('keydown',e=>{ if(e.key==='Enter') sendTyped(); });
@@ -1258,7 +1338,12 @@ document.querySelectorAll('[data-ic]').forEach(el=>{
 });
 document.getElementById('autoBtn').classList.add('on');
 paintMic();
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js')
+    .then(()=>{ swErr=null; })
+    .catch(e=>{ swErr='Échec : '+e.message; });
+}else{ swErr='Ce navigateur ne gère pas les service workers.'; }
+paintInstall();
 go(S.cfg.apiKey && S.cfg.model ? 'sHome' : 'sSetup');
 </script>
 </body>
