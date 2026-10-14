@@ -1,7 +1,7 @@
 // Speak — service worker : coquille hors-ligne.
 // L'app a besoin du réseau pour parler à Gemini, mais l'interface
 // se charge instantanément et reste installable.
-const CACHE = 'speak-v12';
+const CACHE = 'speak-v13';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable.png'];
 
 self.addEventListener('install', e => {
@@ -11,7 +11,10 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // Ne supprimer que les anciens caches de CETTE app : l'origine est
+      // partagée avec les autres apps du compte.
+      .then(keys => Promise.all(
+        keys.filter(k => k.indexOf('speak-') === 0 && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

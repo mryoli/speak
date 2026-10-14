@@ -484,7 +484,7 @@ label .q:active{border-color:var(--accent);color:var(--accent)}
 
 <script>
 'use strict';
-const BUILD='2026-10-14 · 12';
+const BUILD='2026-10-14 · 13';
 /* ============================================================
    ICONS — jeu de traits SVG, hérite de currentColor
    ============================================================ */
@@ -525,6 +525,41 @@ function ic(n,sz,cls){
 }
 
 /* ============================================================
+   STOCKAGE — ESPACE DE NOMS
+   L'origine mryoli.github.io est partagée par toutes les apps du compte :
+   localStorage n'est PAS cloisonné par dossier. Sans préfixe, deux apps
+   utilisant une clé du même nom s'écrasent mutuellement.
+   ============================================================ */
+const NS='speak:';
+const LS={
+  get: function(k){ try{ return localStorage.getItem(NS+k); }catch(e){ return null; } },
+  set: function(k,v){ try{ localStorage.setItem(NS+k,v); }catch(e){} },
+  del: function(k){ try{ localStorage.removeItem(NS+k); }catch(e){} }
+};
+/* Reprise unique des clés non préfixées des versions antérieures. */
+(function nsMigrate(){
+  try{
+    if(localStorage.getItem(NS+'__ns')) return;
+    ['cfg','errors','exprs','sessions','dict','models','burnt','noThink','seenIntro']
+      .forEach(function(k){
+        var v=localStorage.getItem(k);
+        if(v!==null && localStorage.getItem(NS+k)===null){
+          localStorage.setItem(NS+k,v);
+          localStorage.removeItem(k);
+        }
+      });
+    for(var i=localStorage.length-1;i>=0;i--){
+      var k=localStorage.key(i);
+      if(k && k.indexOf('coach_')===0){
+        localStorage.setItem(NS+k, localStorage.getItem(k));
+        localStorage.removeItem(k);
+      }
+    }
+    localStorage.setItem(NS+'__ns','1');
+  }catch(e){}
+})();
+
+/* ============================================================
    FICHES D'AIDE DES CHAMPS
    ============================================================ */
 const FIELD_HELP = {
@@ -563,16 +598,16 @@ function fieldHelp(k){
    ============================================================ */
 const DEF = {apiKey:'',model:'',level:'',ctx:'',name:'',voice:'',rate:0.92,corr:'recast',stt:'gemini',hands:false,autostop:true,reveal:'delayed',slow:0.65};
 const S = {
-  get cfg(){ return Object.assign({},DEF,JSON.parse(localStorage.getItem('cfg')||'{}')); },
-  set cfg(v){ localStorage.setItem('cfg',JSON.stringify(v)); },
-  get errors(){ return JSON.parse(localStorage.getItem('errors')||'[]'); },
-  set errors(v){ localStorage.setItem('errors',JSON.stringify(v)); },
-  get exprs(){ return JSON.parse(localStorage.getItem('exprs')||'[]'); },
-  set exprs(v){ localStorage.setItem('exprs',JSON.stringify(v)); },
-  get sessions(){ return JSON.parse(localStorage.getItem('sessions')||'[]'); },
-  set sessions(v){ localStorage.setItem('sessions',JSON.stringify(v)); },
-  get dict(){ return JSON.parse(localStorage.getItem('dict')||'{}'); },
-  set dict(v){ localStorage.setItem('dict',JSON.stringify(v)); }
+  get cfg(){ return Object.assign({},DEF,JSON.parse(LS.get('cfg')||'{}')); },
+  set cfg(v){ LS.set('cfg',JSON.stringify(v)); },
+  get errors(){ return JSON.parse(LS.get('errors')||'[]'); },
+  set errors(v){ LS.set('errors',JSON.stringify(v)); },
+  get exprs(){ return JSON.parse(LS.get('exprs')||'[]'); },
+  set exprs(v){ LS.set('exprs',JSON.stringify(v)); },
+  get sessions(){ return JSON.parse(LS.get('sessions')||'[]'); },
+  set sessions(v){ LS.set('sessions',JSON.stringify(v)); },
+  get dict(){ return JSON.parse(LS.get('dict')||'{}'); },
+  set dict(v){ LS.set('dict',JSON.stringify(v)); }
 };
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const today = () => new Date().toISOString().slice(0,10);
@@ -631,7 +666,7 @@ const LADDER=[
   /^gemini-3\.5-flash-lite$/, /^gemini-3\.1-flash-lite$/, /flash-lite$/,
   /^gemini-3\.6-flash$/, /^gemini-3\.8-flash$/, /^gemini-3-flash/, /flash$/
 ];
-const known = () => { try{ return JSON.parse(localStorage.getItem('models')||'[]'); }catch(e){ return []; } };
+const known = () => { try{ return JSON.parse(LS.get('models')||'[]'); }catch(e){ return []; } };
 
 /* Modèles dont le quota JOURNALIER est épuisé. Les compteurs Google
    repartent à minuit heure du Pacifique, soit ~08:00 à Abidjan : on calcule
@@ -641,15 +676,15 @@ function pacificDay(){
   return new Date(Date.now() - 8*3600*1000).toISOString().slice(0,10);
 }
 function burnt(){
-  let m={}; try{ m=JSON.parse(localStorage.getItem('burnt')||'{}'); }catch(e){}
+  let m={}; try{ m=JSON.parse(LS.get('burnt')||'{}'); }catch(e){}
   const day=pacificDay(); let changed=false;
   for(const k in m){ if(m[k]!==day){ delete m[k]; changed=true; } }
-  if(changed) localStorage.setItem('burnt',JSON.stringify(m));
+  if(changed) LS.set('burnt',JSON.stringify(m));
   return m;
 }
 function markBurnt(model){
   const m=burnt(); m[model]=pacificDay();
-  localStorage.setItem('burnt',JSON.stringify(m));
+  LS.set('burnt',JSON.stringify(m));
 }
 function nextModel(current){
   const list=known(), dead=burnt(), seen=new Set([current]);
@@ -731,7 +766,7 @@ async function gem(parts, schema, sys, temp){
   if(!c.model)  throw new Error('Aucun modèle choisi. Ouvre les réglages et recharge la liste.');
 
   let model = c.model;
-  let useThink = localStorage.getItem('noThink')!=='1';
+  let useThink = LS.get('noThink')!=='1';
   let switched = 0;
   const tried = [];
 
@@ -761,7 +796,7 @@ async function gem(parts, schema, sys, temp){
     const msg = (d.error && d.error.message) || ('HTTP '+r.status);
 
     if(useThink && r.status===400 && /thinking|unknown name|unsupported|invalid.*field/i.test(msg)){
-      localStorage.setItem('noThink','1'); useThink=false; continue;
+      LS.set('noThink','1'); useThink=false; continue;
     }
 
     if(r.status===429){
@@ -1700,7 +1735,7 @@ async function loadModels(fromSettings){
     sel.innerHTML = list.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
     sel.value = (cur && list.includes(cur)) ? cur : pickDefault(list);
     if(!fromSettings) document.getElementById('modelWrap').style.display='block';
-    localStorage.setItem('models',JSON.stringify(list));
+    LS.set('models',JSON.stringify(list));
     toast(`${list.length} modèles disponibles`);
   }catch(e){ toast(e.message); }
 }
@@ -1720,7 +1755,7 @@ function saveSetup(){
 function fillSettings(){
   const c=S.cfg;
   document.getElementById('setKey').value=c.apiKey;
-  const models=JSON.parse(localStorage.getItem('models')||'[]');
+  const models=JSON.parse(LS.get('models')||'[]');
   const sm=document.getElementById('setModel');
   sm.innerHTML = (models.length?models:[c.model]).map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
   sm.value=c.model;
@@ -1868,8 +1903,8 @@ function renderHelp(){
    INTRO ET AIDES CONTEXTUELLES
    ============================================================ */
 function doneIntro(){
-  localStorage.setItem('seenIntro','1');
-  go(localStorage.getItem('seenIntro') ? (S.cfg.apiKey && S.cfg.model ? 'sHome' : 'sSetup') : 'sIntro');
+  LS.set('seenIntro','1');
+  go(LS.get('seenIntro') ? (S.cfg.apiKey && S.cfg.model ? 'sHome' : 'sSetup') : 'sIntro');
 }
 function replayIntro(){ go('sIntro'); }
 
@@ -1881,9 +1916,9 @@ const COACH={
   stuck:['Tu bloques sur un mot ?','Appuie sur « Bloqué », dis-le en français, et l’app te donne la tournure anglaise à répéter.']
 };
 function coach(k){
-  if(localStorage.getItem('coach_'+k)) return;
+  if(LS.get('coach_'+k)) return;
   const c=COACH[k]; if(!c) return;
-  localStorage.setItem('coach_'+k,'1');
+  LS.set('coach_'+k,'1');
   const el=document.getElementById('coachBox');
   el.innerHTML=`<span style="color:var(--accent);display:flex">${ic('bulb',19)}</span>
     <span class="tx"><b>${esc(c[0])}</b>${esc(c[1])}</span>
@@ -1982,13 +2017,17 @@ async function renderDiag(){
 /* purge totale : service workers, caches, puis rechargement */
 async function hardRefresh(){
   toast('Mise à jour…');
+  // Ne toucher qu'à CETTE app : l'origine est partagée avec les autres
+  // apps du compte, dont les service workers et les caches sont voisins.
   try{
     const regs = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(regs.map(r=>r.unregister()));
+    await Promise.all(regs
+      .filter(r => (r.scope||'').indexOf(location.pathname.replace(/[^/]*$/,'')) === 0)
+      .map(r => r.unregister()));
   }catch(e){}
   try{
     const keys = await caches.keys();
-    await Promise.all(keys.map(k=>caches.delete(k)));
+    await Promise.all(keys.filter(k => k.indexOf('speak-') === 0).map(k => caches.delete(k)));
   }catch(e){}
   location.replace(location.pathname + '?v=' + Date.now());
 }
@@ -2041,7 +2080,7 @@ paintMic();
   if(!c.apiKey) return;
   try{
     const list = await listModels(c.apiKey);
-    if(list.length) localStorage.setItem('models', JSON.stringify(list));
+    if(list.length) LS.set('models', JSON.stringify(list));
   }catch(e){}
 })();
 
