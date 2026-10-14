@@ -3,17 +3,66 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#0d0a14">
+<meta name="theme-color" content="#ffffff">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Speak — coach d'anglais oral</title>
 <style>
 :root{
+  /* Thème clair — valeurs par défaut. Le violet est assombri : #a78bfa sur
+     fond blanc est illisible. */
+  --bg:#ffffff; --surface:#f8f6fc; --surface2:#f0ecf8; --line:#e2dcef;
+  --text:#1a1527; --dim:#5a5270; --faint:#8b84a0;
+  --accent:#6d41d1; --accent-dim:#c4b2f0; --accent-deep:#4c2a9e;
+  --on-accent:#ffffff; --on-bad:#ffffff;
+  --accent-grad:#7c5ce0;
+  --accent-a08:rgba(109,65,209,.07); --accent-a09:rgba(109,65,209,.08);
+  --accent-a13:rgba(109,65,209,.11); --accent-a14:rgba(109,65,209,.12);
+  --accent-a16:rgba(109,65,209,.14);
+  --accent-glow:rgba(109,65,209,.22);
+  --ok:#1d7a5f; --ok-a14:rgba(29,122,95,.13);
+  --bad:#c0392b; --bad-a07:rgba(192,57,43,.07); --bad-a14:rgba(192,57,43,.12);
+  --bad-ring:rgba(192,57,43,.35); --bad-ring0:rgba(192,57,43,0);
+  --blue:#2563c9;
+  --veil:rgba(26,21,39,.45); --shadow:rgba(26,21,39,.18);
+  --r:14px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d0a14; --surface:#171221; --surface2:#201a2e; --line:#2f2743;
+    --text:#ece9f3; --dim:#a39ab9; --faint:#726a8c;
+    --accent:#a78bfa; --accent-dim:#5b3fa8; --accent-deep:#5b21b6;
+    --on-accent:#190f30; --on-bad:#2a0d09;
+    --accent-grad:#7c5ce0;
+    --accent-a08:rgba(167,139,250,.08); --accent-a09:rgba(167,139,250,.09);
+    --accent-a13:rgba(167,139,250,.13); --accent-a14:rgba(167,139,250,.14);
+    --accent-a16:rgba(167,139,250,.16);
+    --accent-glow:rgba(124,92,224,.28);
+    --ok:#4ec9a0; --ok-a14:rgba(78,201,160,.14);
+    --bad:#f0736a; --bad-a07:rgba(240,115,106,.07); --bad-a14:rgba(240,115,106,.14);
+    --bad-ring:rgba(240,115,106,.45); --bad-ring0:rgba(240,115,106,0);
+    --blue:#8ab4f8;
+    --veil:rgba(0,0,0,.72); --shadow:rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
   --bg:#0d0a14; --surface:#171221; --surface2:#201a2e; --line:#2f2743;
   --text:#ece9f3; --dim:#a39ab9; --faint:#726a8c;
   --accent:#a78bfa; --accent-dim:#5b3fa8; --accent-deep:#5b21b6;
-  --ok:#4ec9a0; --bad:#f0736a; --blue:#8ab4f8;
-  --r:14px;
+  --on-accent:#190f30; --on-bad:#2a0d09;
+  --accent-grad:#7c5ce0;
+  --accent-a08:rgba(167,139,250,.08); --accent-a09:rgba(167,139,250,.09);
+  --accent-a13:rgba(167,139,250,.13); --accent-a14:rgba(167,139,250,.14);
+  --accent-a16:rgba(167,139,250,.16);
+  --accent-glow:rgba(124,92,224,.28);
+  --ok:#4ec9a0; --ok-a14:rgba(78,201,160,.14);
+  --bad:#f0736a; --bad-a07:rgba(240,115,106,.07); --bad-a14:rgba(240,115,106,.14);
+  --bad-ring:rgba(240,115,106,.45); --bad-ring0:rgba(240,115,106,0);
+  --blue:#8ab4f8;
+  --veil:rgba(0,0,0,.72); --shadow:rgba(0,0,0,.45);
+  color-scheme:dark;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0}
@@ -33,7 +82,7 @@ h2{font-size:15px;margin:0 0 10px;color:var(--dim);font-weight:600;text-transfor
 .body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
 .foot{flex:0 0 auto;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface)}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
-.btn{display:block;width:100%;padding:15px;border-radius:var(--r);background:linear-gradient(135deg,var(--accent),#7c5ce0);color:#190f30;font-weight:650;text-align:center}
+.btn{display:block;width:100%;padding:15px;border-radius:var(--r);background:linear-gradient(135deg,var(--accent),var(--accent-grad));color:var(--on-accent);font-weight:650;text-align:center}
 .btn:disabled{opacity:.4}
 .btn.sec{background:var(--surface2);color:var(--text);border:1px solid var(--line)}
 .btn.ghost{background:none;border:1px solid var(--line);color:var(--dim)}
@@ -53,8 +102,8 @@ label{display:block;font-size:13px;color:var(--dim);margin:16px 0 6px;font-weigh
 a{color:var(--blue)}
 .row{display:flex;gap:10px;align-items:center}
 .pill{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.03em}
-.pill.ok{background:rgba(78,201,160,.14);color:var(--ok)}
-.pill.bad{background:rgba(240,115,106,.14);color:var(--bad)}
+.pill.ok{background:var(--ok-a14);color:var(--ok)}
+.pill.bad{background:var(--bad-a14);color:var(--bad)}
 .pill.n{background:var(--surface2);color:var(--dim)}
 .empty{text-align:center;color:var(--faint);padding:48px 20px;font-size:14px;line-height:1.6}
 
@@ -64,7 +113,7 @@ a{color:var(--blue)}
   transition:border-color .15s,background .15s}
 .scen:active{border-color:var(--accent);background:var(--surface2)}
 .scen .tile{width:40px;height:40px;border-radius:11px;flex:0 0 auto;display:flex;align-items:center;
-  justify-content:center;background:rgba(167,139,250,.13);color:var(--accent)}
+  justify-content:center;background:var(--accent-a13);color:var(--accent)}
 .scen b{display:block;font-weight:620;margin-bottom:1px;font-size:15px}
 .scen .sub{font-size:12.5px;color:var(--faint);line-height:1.35;display:block}
 .scen .go{color:var(--faint);flex:0 0 auto}
@@ -83,8 +132,8 @@ a{color:var(--blue)}
 .msg.sys .bub{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--faint);
   background:var(--surface);padding:6px 13px;border-radius:99px;border:1px solid var(--line);text-align:left}
 .w{cursor:pointer;border-radius:3px;padding:0 1px}
-.w:active{background:var(--accent-dim);color:#fff}
-.recast{font-weight:700;color:var(--accent);box-shadow:inset 0 -.55em 0 rgba(167,139,250,.14);border-radius:2px}
+.w:active{background:var(--accent);color:var(--on-accent)}
+.recast{font-weight:700;color:var(--accent);box-shadow:inset 0 -.55em 0 var(--accent-a14);border-radius:2px}
 .mtools{display:flex;gap:5px;margin-top:8px;padding-left:2px}
 .mtools button{font-size:12px;color:var(--faint);padding:5px 10px;border-radius:9px;border:1px solid var(--line);
   display:flex;align-items:center;gap:5px}
@@ -101,7 +150,7 @@ a{color:var(--blue)}
 .msg.ai.playing .veil .bars i:nth-child(4){animation-delay:.45s}
 @keyframes eq{0%,100%{height:30%;opacity:.45}50%{height:100%;opacity:1}}
 .veil b{font-weight:600;color:var(--dim)}
-.corr{background:rgba(167,139,250,.09);border:1px solid var(--accent-dim);border-radius:12px;padding:11px 13px;margin-bottom:16px;font-size:14px}
+.corr{background:var(--accent-a09);border:1px solid var(--accent-dim);border-radius:12px;padding:11px 13px;margin-bottom:16px;font-size:14px}
 .corr .ttl{font-size:10.5px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.07em;
   margin-bottom:7px;display:flex;align-items:center;gap:5px}
 .corr .x{color:var(--bad);text-decoration:line-through;opacity:.8}
@@ -117,23 +166,23 @@ a{color:var(--blue)}
   width:62%;opacity:0;transition:opacity .2s}
 .lvl.on{opacity:1}
 .lvl i{display:block;height:100%;width:0;border-radius:9px;
-  background:linear-gradient(90deg,var(--accent),#7c5ce0);transition:width .06s linear}
+  background:linear-gradient(90deg,var(--accent),var(--accent-grad));transition:width .06s linear}
 .livebox{min-height:22px;font-size:14px;color:var(--dim);text-align:center;margin-bottom:10px;
   line-height:1.4;max-height:72px;overflow:hidden}
 .livebox .fin{color:var(--text)}
 .miczone{display:flex;align-items:center;justify-content:center;gap:16px}
-.mic{width:78px;height:78px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7c5ce0);color:#190f30;
+.mic{width:78px;height:78px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-grad));color:var(--on-accent);
   display:flex;align-items:center;justify-content:center;flex:0 0 auto;transition:transform .12s;
-  box-shadow:0 6px 22px rgba(124,92,224,.28)}
+  box-shadow:0 6px 22px var(--accent-glow)}
 .mic:active{transform:scale(.94)}
 .mic.off{background:var(--surface2);color:var(--faint)}
-.mic.live{background:var(--bad);color:#fff;animation:pulse 1.4s infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(240,115,106,.45)}70%{box-shadow:0 0 0 18px rgba(240,115,106,0)}}
+.mic.live{background:var(--bad);color:var(--on-bad);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--bad-ring)}70%{box-shadow:0 0 0 18px var(--bad-ring0)}}
 .side{display:flex;flex-direction:column;align-items:center;gap:5px;width:74px}
 .side button{padding:11px;border-radius:13px;border:1px solid var(--line);color:var(--dim);
   display:flex;align-items:center;justify-content:center;background:var(--surface)}
 .side button:active{border-color:var(--accent-dim);color:var(--accent)}
-.side button.on{color:var(--accent);border-color:var(--accent-dim);background:rgba(167,139,250,.08)}
+.side button.on{color:var(--accent);border-color:var(--accent-dim);background:var(--accent-a08)}
 .side span{font-size:10px;color:var(--faint);text-align:center;line-height:1.25}
 .typebar{display:flex;gap:8px;margin-bottom:10px}
 .typebar input{flex:1}
@@ -155,7 +204,7 @@ a{color:var(--blue)}
 .fc .a{font-size:24px;font-weight:650;color:var(--accent);letter-spacing:-.01em}
 
 /* modal */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:flex-end;z-index:50}
+.modal{position:fixed;inset:0;background:var(--veil);display:none;align-items:flex-end;z-index:50}
 .modal.on{display:flex}
 .sheet{background:var(--surface);width:100%;max-width:560px;margin:0 auto;border-radius:20px 20px 0 0;
   padding:20px 20px calc(24px + env(safe-area-inset-bottom));border-top:1px solid var(--line);
@@ -192,7 +241,7 @@ label .q:active{border-color:var(--accent);color:var(--accent)}
 .hero p{margin:0;color:var(--dim);font-size:14.5px;line-height:1.5}
 .rule{display:flex;gap:13px;align-items:flex-start;margin-bottom:16px}
 .rule .n{width:27px;height:27px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;
-  justify-content:center;background:rgba(167,139,250,.14);color:var(--accent);font-weight:700;font-size:13px}
+  justify-content:center;background:var(--accent-a14);color:var(--accent);font-weight:700;font-size:13px}
 .rule b{display:block;font-size:14.5px;font-weight:650;margin-bottom:2px}
 .rule span{font-size:13.5px;color:var(--dim);line-height:1.5}
 .note{border-left:2px solid var(--accent-dim);padding:2px 0 2px 13px;margin:20px 0;
@@ -202,14 +251,14 @@ label .q:active{border-color:var(--accent);color:var(--accent)}
 .coach{position:fixed;left:16px;right:16px;bottom:118px;max-width:528px;margin:0 auto;z-index:40;
   background:var(--surface2);border:1px solid var(--accent-dim);border-radius:var(--r);
   padding:13px 15px;display:none;align-items:flex-start;gap:11px;
-  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  box-shadow:0 10px 30px var(--shadow)}
 .coach.on{display:flex}
 .coach .tx{flex:1;font-size:13.5px;line-height:1.5}
 .coach .tx b{display:block;margin-bottom:2px}
 .coach .x{color:var(--faint);padding:2px 4px;flex:0 0 auto}
 
 .install{display:none;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 14px;margin-bottom:18px;
-  background:linear-gradient(135deg,rgba(167,139,250,.16),rgba(124,92,224,.08));
+  background:linear-gradient(135deg,var(--accent-a16),var(--accent-a08));
   border:1px solid var(--accent-dim);border-radius:var(--r)}
 .install.on{display:flex}
 .install b{display:block;font-size:14.5px;font-weight:620}
@@ -437,6 +486,12 @@ label .q:active{border-color:var(--accent);color:var(--accent)}
       <option value="1">S'arrête seul après 2 s de silence</option>
       <option value="0">Je coupe le micro moi-même</option>
     </select>
+    <label>Apparence</label>
+    <select id="setTheme">
+      <option value="auto">Automatique — suit le réglage du téléphone</option>
+      <option value="light">Toujours clair</option>
+      <option value="dark">Toujours sombre</option>
+    </select>
     <label>Texte des réponses <span class="q" onclick="fieldHelp('reveal')">?</span></label>
     <select id="setReveal">
       <option value="delayed">Masqué — écouter d'abord, taper pour lire (recommandé)</option>
@@ -484,7 +539,7 @@ label .q:active{border-color:var(--accent);color:var(--accent)}
 
 <script>
 'use strict';
-const BUILD='2026-10-14 · 13';
+const BUILD='2026-10-14 · 14';
 /* ============================================================
    ICONS — jeu de traits SVG, hérite de currentColor
    ============================================================ */
@@ -523,6 +578,24 @@ function ic(n,sz,cls){
     + `fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" `
     + `stroke-linejoin="round" aria-hidden="true">${ICONS[n]||''}</svg>`;
 }
+
+/* ============================================================
+   THÈME
+   ============================================================ */
+const THEME_BG={light:'#ffffff', dark:'#0d0a14'};
+function applyTheme(){
+  let t='auto';
+  try{ t=(JSON.parse(localStorage.getItem('speak:cfg')||'{}').theme)||'auto'; }catch(e){}
+  const root=document.documentElement;
+  if(t==='auto') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme',t);
+  // la barre système d'Android suit, sinon on garde un bandeau sombre en mode clair
+  const dark = t==='dark' || (t==='auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  let m=document.querySelector('meta[name="theme-color"]');
+  if(!m){ m=document.createElement('meta'); m.name='theme-color'; document.head.appendChild(m); }
+  m.content = dark ? THEME_BG.dark : THEME_BG.light;
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 /* ============================================================
    STOCKAGE — ESPACE DE NOMS
@@ -596,7 +669,7 @@ function fieldHelp(k){
 /* ============================================================
    STORE
    ============================================================ */
-const DEF = {apiKey:'',model:'',level:'',ctx:'',name:'',voice:'',rate:0.92,corr:'recast',stt:'gemini',hands:false,autostop:true,reveal:'delayed',slow:0.65};
+const DEF = {apiKey:'',model:'',level:'',ctx:'',name:'',voice:'',rate:0.92,corr:'recast',stt:'gemini',hands:false,autostop:true,reveal:'delayed',slow:0.65,theme:'auto'};
 const S = {
   get cfg(){ return Object.assign({},DEF,JSON.parse(LS.get('cfg')||'{}')); },
   set cfg(v){ LS.set('cfg',JSON.stringify(v)); },
@@ -1348,7 +1421,7 @@ function failTurn(e){
   busy=false; thinkOff(); paintMic();
   const b=document.getElementById('chatBody');
   b.insertAdjacentHTML('beforeend',
-    `<div class="corr" style="border-color:var(--bad);background:rgba(240,115,106,.07)">
+    `<div class="corr" style="border-color:var(--bad);background:var(--bad-a07)">
        <div class="ttl" style="color:var(--bad)">${ic('alert',13)}Échec</div>
        <div style="font-size:13.5px">${esc(e && e.message ? e.message : String(e))}</div>
        ${lastSend?`<button class="btn sec sm" style="margin-top:10px" onclick="retryLast()">Réessayer</button>`:''}
@@ -1766,6 +1839,7 @@ function fillSettings(){
   document.getElementById('setCorr').value=c.corr;
   document.getElementById('setStt').value=c.stt;
   document.getElementById('setReveal').value=c.reveal;
+  document.getElementById('setTheme').value=c.theme||'auto';
   document.getElementById('setSlow').value=c.slow;
   document.getElementById('slowLbl').textContent=(+c.slow).toFixed(2)+'×';
   document.getElementById('buildLbl').textContent=BUILD;
@@ -1793,9 +1867,11 @@ function saveSettings(){
     corr:document.getElementById('setCorr').value,
     stt:document.getElementById('setStt').value,
     reveal:document.getElementById('setReveal').value,
+    theme:document.getElementById('setTheme').value,
     slow:+document.getElementById('setSlow').value,
     autostop:document.getElementById('setAutostop').value==='1'
   });
+  applyTheme();
   toast('Enregistré'); go('sHome');
 }
 
@@ -2067,6 +2143,7 @@ setInterval(()=>{
 document.getElementById('typeIn').addEventListener('keydown',e=>{ if(e.key==='Enter') sendTyped(); });
 setInterval(()=>{ if(sess && document.getElementById('sChat').classList.contains('on')) updMeta(); },5000);
 loadVoices();
+applyTheme();
 bindMic();
 document.querySelectorAll('[data-ic]').forEach(el=>{
   if(!el.querySelector('svg')) el.insertAdjacentHTML('afterbegin', ic(el.dataset.ic, el.classList.contains('icbtn')?21:22));
