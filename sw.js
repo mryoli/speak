@@ -1,7 +1,7 @@
 // Speak — service worker : coquille hors-ligne.
 // L'app a besoin du réseau pour parler à Gemini, mais l'interface
 // se charge instantanément et reste installable.
-const CACHE = 'speak-v6';
+const CACHE = 'speak-v7';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable.png'];
 
 self.addEventListener('install', e => {
