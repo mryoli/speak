@@ -358,7 +358,7 @@ a{color:var(--blue)}
 
 <script>
 'use strict';
-const BUILD='2026-10-14 · 7';
+const BUILD='2026-10-14 · 8';
 /* ============================================================
    ICONS — jeu de traits SVG, hérite de currentColor
    ============================================================ */
@@ -453,8 +453,8 @@ async function listModels(key){
 }
 
 function pickDefault(list){
-  for(const p of [/^gemini-3\.8-flash$/, /^gemini-3\.6-flash$/, /^gemini-3\.5-flash-lite$/,
-                  /flash$/, /flash-lite$/, /flash/, /./]){
+  for(const p of [/^gemini-3\.5-flash-lite$/, /^gemini-3\.1-flash-lite$/, /flash-lite$/,
+                  /^gemini-3\.8-flash$/, /^gemini-3\.6-flash$/, /flash$/, /flash/, /./]){
     const m = list.find(x=>p.test(x)); if(m) return m;
   }
   return list[0]||'';
@@ -509,7 +509,22 @@ async function gem(parts, schema, sys){
       if(useThink && r.status===400 && /thinking|unknown name|unsupported|invalid.*field/i.test(msg)){
         localStorage.setItem('noThink','1'); useThink=false; continue;
       }
-      if(r.status===429) throw new Error('Quota Gemini atteint. Réessaie plus tard, ou choisis un modèle flash-lite dans les réglages.');
+      if(r.status===429){
+        // Google précise la limite franchie et le délai d'attente : on les garde.
+        const det = d.error?.details || [];
+        const viol = det.find(x=>/QuotaFailure/.test(x['@type']||''))?.violations?.[0];
+        const retry = det.find(x=>/RetryInfo/.test(x['@type']||''))?.retryDelay;
+        const metric = (viol?.quotaMetric||viol?.quotaId||'').toLowerCase();
+        let what = 'Quota Gemini atteint';
+        if(/per_day|perday|requests_per_day/.test(metric)) what = 'Quota du jour épuisé sur ce modèle';
+        else if(/per_minute|perminute/.test(metric))       what = 'Trop de requêtes par minute';
+        else if(/input_token|tokens/.test(metric))         what = 'Quota de tokens atteint';
+        const secs = retry ? parseInt(retry) : 0;
+        throw new Error(`${what} (${c.model}).`
+          + (secs ? ` Réessaie dans ${secs<60?secs+' s':Math.ceil(secs/60)+' min'}.` : '')
+          + ' Les quotas sont comptés par modèle : bascule sur un modèle flash-lite dans les réglages pour continuer tout de suite.'
+          + (viol?.quotaValue ? ` Limite : ${viol.quotaValue}.` : ''));
+      }
       if(r.status===401 || r.status===403) throw new Error('Clé API refusée. Vérifie-la dans les réglages.');
       if(r.status===404) throw new Error(`Modèle « ${c.model} » introuvable. Recharge la liste des modèles dans les réglages.`);
       throw new Error(msg);
